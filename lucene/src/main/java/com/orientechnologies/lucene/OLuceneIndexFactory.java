@@ -19,6 +19,7 @@ package com.orientechnologies.lucene;
 import com.orientechnologies.common.log.OLogManager;
 import com.orientechnologies.lucene.engine.OLuceneFullTextIndexEngine;
 import com.orientechnologies.lucene.index.OLuceneFullTextIndex;
+import com.orientechnologies.lucene.index.OLuceneIndexNotUniqueImpl;
 import com.orientechnologies.orient.core.Orient;
 import com.orientechnologies.orient.core.db.ODatabaseInternal;
 import com.orientechnologies.orient.core.db.ODatabaseLifecycleListener;
@@ -29,6 +30,7 @@ import com.orientechnologies.orient.core.index.OIndexInternal;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorage;
 import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
+import org.apache.lucene.analysis.core.KeywordAnalyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 
 import java.util.Collections;
@@ -37,6 +39,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE.FULLTEXT;
+import static com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE.NOTUNIQUE;
 
 public class OLuceneIndexFactory implements OIndexFactory, ODatabaseLifecycleListener {
 
@@ -48,6 +51,7 @@ public class OLuceneIndexFactory implements OIndexFactory, ODatabaseLifecycleLis
   static {
     final Set<String> types = new HashSet<String>();
     types.add(FULLTEXT.toString());
+    types.add(NOTUNIQUE.toString());
     TYPES = Collections.unmodifiableSet(types);
   }
 
@@ -94,6 +98,17 @@ public class OLuceneIndexFactory implements OIndexFactory, ODatabaseLifecycleLis
     if (FULLTEXT.toString().equalsIgnoreCase(indexType)) {
 
       OLuceneFullTextIndex index = new OLuceneFullTextIndex(name, indexType, algorithm, version, pagStorage,
+          valueContainerAlgorithm, metadata);
+
+      return index;
+    }
+    if (NOTUNIQUE.toString().equalsIgnoreCase(indexType)) {
+
+      metadata.clear();
+
+      metadata = new ODocument().field("analyzer", KeywordAnalyzer.class.getName());
+
+      OLuceneIndexNotUniqueImpl index = new OLuceneIndexNotUniqueImpl(name, indexType, algorithm, version, pagStorage,
           valueContainerAlgorithm, metadata);
 
       return index;
