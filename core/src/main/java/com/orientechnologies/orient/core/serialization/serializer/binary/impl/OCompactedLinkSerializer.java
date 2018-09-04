@@ -201,4 +201,33 @@ public class OCompactedLinkSerializer implements OBinarySerializer<OIdentifiable
     return walChanges.getByteValue(buffer, offset + OShortSerializer.SHORT_SIZE) + OByteSerializer.BYTE_SIZE
         + OShortSerializer.SHORT_SIZE;
   }
+
+  @Override
+  public byte[] serializeNativeAsWhole(OIdentifiable rid, Object... hints) {
+    final ORID r = rid.getIdentity();
+
+    int size = OShortSerializer.SHORT_SIZE + OByteSerializer.BYTE_SIZE;
+
+    final int zeroBits = Long.numberOfLeadingZeros(r.getClusterPosition());
+    final int zerosTillFullByte = zeroBits & 7;
+    final int numberSize = 8 - (zeroBits - zerosTillFullByte) / 8;
+    size += numberSize;
+
+    final byte[] result = new byte[size];
+
+    int position = 0;
+    OShortSerializer.INSTANCE.serializeNative((short) r.getClusterId(), result, 0);
+    position += OShortSerializer.SHORT_SIZE;
+
+    result[position] = (byte) numberSize;
+    position++;
+
+    long clusterPosition = r.getClusterPosition();
+    for (int i = 0; i < numberSize; i++) {
+      result[position + i] = (byte) ((0xFF) & clusterPosition);
+      clusterPosition = clusterPosition >>> 8;
+    }
+
+    return result;
+  }
 }
