@@ -15,7 +15,7 @@ import java.nio.ByteBuffer;
  * @author Andrey Lomakin (a.lomakin-at-orientdb.com)
  * @since 4/15/14
  */
-public class ONullBucketTest {
+public class OSingleValueNullBucketTest {
   @Test
   public void testEmptyBucket() {
     OByteBufferPool bufferPool = new OByteBufferPool(1024);
