@@ -95,7 +95,7 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
   private              boolean               nullPointerSupport;
   private              OEncryption           encryption;
 
-  public OSBTreeSingleValue(String name, String dataFileExtension, String nullFileExtension, OAbstractPaginatedStorage storage) {
+  OSBTreeSingleValue(String name, String dataFileExtension, String nullFileExtension, OAbstractPaginatedStorage storage) {
     super(storage, name, dataFileExtension, name + dataFileExtension);
     acquireExclusiveLock();
     try {
@@ -336,13 +336,18 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
         }
 
         while (!keyBucket.addLeafEntry(insertionIndex, rawKey, serializedValue)) {
-          releasePageFromWrite(atomicOperation, keyBucketCacheEntry);
-
-          bucketSearchResult = splitBucket(bucketSearchResult.path, insertionIndex, key, atomicOperation);
+          bucketSearchResult = splitBucket(keyBucket, keyBucketCacheEntry, bucketSearchResult.path, insertionIndex, key,
+              atomicOperation);
 
           insertionIndex = bucketSearchResult.itemIndex;
 
-          keyBucketCacheEntry = loadPageForWrite(atomicOperation, fileId, bucketSearchResult.getLastPathItem(), false);
+          long pageIndex = bucketSearchResult.getLastPathItem();
+
+          if (pageIndex != keyBucketCacheEntry.getPageIndex()) {
+            releasePageFromWrite(atomicOperation, keyBucketCacheEntry);
+
+            keyBucketCacheEntry = loadPageForWrite(atomicOperation, fileId, pageIndex, false);
+          }
 
           keyBucket = new OSBTreeBucketSingleValue<>(keyBucketCacheEntry, keySerializer, keyTypes, encryption);
         }
@@ -1132,36 +1137,27 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
     return keyFrom;
   }
 
-  private BucketSearchResult splitBucket(List<Long> path, int keyIndex, K keyToInsert, OAtomicOperation atomicOperation)
-      throws IOException {
-    long pageIndex = path.get(path.size() - 1);
+  private BucketSearchResult splitBucket(OSBTreeBucketSingleValue<K> bucketToSplit, OCacheEntry entryToSplit, List<Long> path,
+      int keyIndex, K keyToInsert, OAtomicOperation atomicOperation) throws IOException {
+    final boolean splitLeaf = bucketToSplit.isLeaf();
+    final int bucketSize = bucketToSplit.size();
 
-    OCacheEntry bucketEntry = loadPageForWrite(atomicOperation, fileId, pageIndex, false);
-    try {
-      OSBTreeBucketSingleValue<K> bucketToSplit = new OSBTreeBucketSingleValue<>(bucketEntry, keySerializer, keyTypes, encryption);
+    int indexToSplit = bucketSize >>> 1;
+    final K separationKey = bucketToSplit.getKey(indexToSplit);
+    final List<byte[]> rightEntries = new ArrayList<>(indexToSplit);
 
-      final boolean splitLeaf = bucketToSplit.isLeaf();
-      final int bucketSize = bucketToSplit.size();
+    final int startRightIndex = splitLeaf ? indexToSplit : indexToSplit + 1;
 
-      int indexToSplit = bucketSize >>> 1;
-      final K separationKey = bucketToSplit.getKey(indexToSplit);
-      final List<byte[]> rightEntries = new ArrayList<>(indexToSplit);
+    for (int i = startRightIndex; i < bucketSize; i++) {
+      rightEntries.add(bucketToSplit.getRawEntry(i));
+    }
 
-      final int startRightIndex = splitLeaf ? indexToSplit : indexToSplit + 1;
-
-      for (int i = startRightIndex; i < bucketSize; i++) {
-        rightEntries.add(bucketToSplit.getRawEntry(i));
-      }
-
-      if (pageIndex != ROOT_INDEX) {
-        return splitNonRootBucket(path, keyIndex, keyToInsert, pageIndex, bucketToSplit, splitLeaf, indexToSplit, separationKey,
-            rightEntries, atomicOperation);
-      } else {
-        return splitRootBucket(path, keyIndex, keyToInsert, bucketEntry, bucketToSplit, splitLeaf, indexToSplit, separationKey,
-            rightEntries, atomicOperation);
-      }
-    } finally {
-      releasePageFromWrite(atomicOperation, bucketEntry);
+    if (entryToSplit.getPageIndex() != ROOT_INDEX) {
+      return splitNonRootBucket(path, keyIndex, keyToInsert, entryToSplit.getPageIndex(), bucketToSplit, splitLeaf, indexToSplit,
+          separationKey, rightEntries, atomicOperation);
+    } else {
+      return splitRootBucket(path, keyIndex, keyToInsert, entryToSplit, bucketToSplit, splitLeaf, indexToSplit, separationKey,
+          rightEntries, atomicOperation);
     }
   }
 
@@ -1209,16 +1205,17 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
         assert insertionIndex < 0;
 
         insertionIndex = -insertionIndex - 1;
-        while (!parentBucket.addEntry(insertionIndex, parentEntry, true)) {
-          releasePageFromWrite(atomicOperation, parentCacheEntry);
 
-          BucketSearchResult bucketSearchResult = splitBucket(path.subList(0, path.size() - 1), insertionIndex, separationKey,
-              atomicOperation);
+        while (!parentBucket.addEntry(insertionIndex, parentEntry, true)) {
+          BucketSearchResult bucketSearchResult = splitBucket(parentBucket, parentCacheEntry, path.subList(0, path.size() - 1),
+              insertionIndex, separationKey, atomicOperation);
 
           parentIndex = bucketSearchResult.getLastPathItem();
-          parentCacheEntry = loadPageForWrite(atomicOperation, fileId, parentIndex, false);
-
           insertionIndex = bucketSearchResult.itemIndex;
+
+          if (parentIndex != parentCacheEntry.getPageIndex()) {
+            parentCacheEntry = loadPageForWrite(atomicOperation, fileId, parentIndex, false);
+          }
 
           parentBucket = new OSBTreeBucketSingleValue<>(parentCacheEntry, keySerializer, keyTypes, encryption);
         }
