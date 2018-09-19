@@ -369,7 +369,7 @@ public class OSBTreeBucketSingleValue<K> extends ODurablePage {
   }
 
   boolean addLeafEntry(final int index, final byte[] serializedKey, final byte[] serializedValue) {
-    final int entrySize = serializedKey.length + serializedValue.length + OByteSerializer.BYTE_SIZE;
+    final int entrySize = serializedKey.length + serializedValue.length;
 
     assert isLeaf;
     final int size = getIntValue(SIZE_OFFSET);
