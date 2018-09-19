@@ -1214,6 +1214,8 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
           insertionIndex = bucketSearchResult.itemIndex;
 
           if (parentIndex != parentCacheEntry.getPageIndex()) {
+            releasePageFromWrite(atomicOperation, parentCacheEntry);
+
             parentCacheEntry = loadPageForWrite(atomicOperation, fileId, parentIndex, false);
           }
 
