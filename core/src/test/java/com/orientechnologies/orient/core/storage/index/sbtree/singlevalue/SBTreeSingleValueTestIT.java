@@ -339,7 +339,7 @@ public class SBTreeSingleValueTestIT {
     final int keysCount = 100_000_000;
 
     NavigableMap<String, ORID> keyValues = new TreeMap<>();
-    final long seed = System.nanoTime();
+    final long seed = 163938058503994L;//System.nanoTime();
 
     System.out.println("testKeyCursor: " + seed);
     Random random = new Random(seed);
