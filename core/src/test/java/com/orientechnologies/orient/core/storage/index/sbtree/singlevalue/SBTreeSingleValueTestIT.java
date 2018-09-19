@@ -348,6 +348,10 @@ public class SBTreeSingleValueTestIT {
       int val = random.nextInt(Integer.MAX_VALUE);
       String key = Integer.toString(val);
 
+      if (keyValues.size() == 5026921) {
+        System.out.println();
+      }
+
       singleValueTree.put(key, new ORecordId(val % 32000, val));
       keyValues.put(key, new ORecordId(val % 32000, val));
     }
