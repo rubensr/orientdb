@@ -188,14 +188,78 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             return Collections.emptyList();
           }
 
-          long pageIndex = bucketSearchResult.getLastPathItem();
-          OCacheEntry keyBucketCacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
+          final long pageIndex = bucketSearchResult.getLastPathItem();
+          final int itemIndex = bucketSearchResult.itemIndex;
+
+          long leftSibling = -1;
+          long rightSibling = -1;
+
+          List<ORID> result = new ArrayList<>();
+          OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
           try {
-            OSBTreeBucketMultiValue<K> keyBucket = new OSBTreeBucketMultiValue<>(keyBucketCacheEntry, keySerializer, encryption);
-            return keyBucket.getValues(bucketSearchResult.itemIndex);
+            final OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
+            result.addAll(bucket.getValues(itemIndex));
+
+            if (itemIndex == 0) {
+              leftSibling = bucket.getLeftSibling();
+            }
+
+            if (itemIndex == bucket.size() - 1) {
+              rightSibling = bucket.getRightSibling();
+            }
           } finally {
-            releasePageFromRead(atomicOperation, keyBucketCacheEntry);
+            releasePageFromRead(atomicOperation, cacheEntry);
           }
+
+          while (leftSibling >= 0) {
+            cacheEntry = loadPageForRead(atomicOperation, fileId, leftSibling, false);
+            try {
+              OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
+              final int size = bucket.size();
+
+              if (size > 0) {
+                if (bucket.getKey(size - 1).equals(key)) {
+                  result.addAll(bucket.getValues(size - 1));
+                }
+
+                if (size == 1) {
+                  leftSibling = bucket.getLeftSibling();
+                } else {
+                  leftSibling = -1;
+                }
+              } else {
+                leftSibling = bucket.getLeftSibling();
+              }
+            } finally {
+              releasePageFromRead(atomicOperation, cacheEntry);
+            }
+          }
+
+          while (rightSibling >= 0) {
+            cacheEntry = loadPageForRead(atomicOperation, fileId, rightSibling, false);
+            try {
+              OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
+              final int size = bucket.size();
+
+              if (size > 0) {
+                if (bucket.getKey(0).equals(key)) {
+                  result.addAll(bucket.getValues(0));
+                }
+
+                if (size == 1) {
+                  rightSibling = bucket.getRightSibling();
+                } else {
+                  rightSibling = -1;
+                }
+              } else {
+                rightSibling = bucket.getRightSibling();
+              }
+            } finally {
+              releasePageFromRead(atomicOperation, cacheEntry);
+            }
+          }
+
+          return result;
         } else {
           if (getFilledUpTo(atomicOperation, nullBucketFileId) == 0) {
             return Collections.emptyList();
@@ -243,7 +307,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
               getName());
         }
 
-        BucketSearchResult bucketSearchResult = findBucket(key, atomicOperation);
+        UpdateBucketSearchResult bucketSearchResult = findBucketForUpdate(key, atomicOperation);
 
         OCacheEntry keyBucketCacheEntry = loadPageForWrite(atomicOperation, fileId, bucketSearchResult.getLastPathItem(), false);
         OSBTreeBucketMultiValue<K> keyBucket = new OSBTreeBucketMultiValue<>(keyBucketCacheEntry, keySerializer, encryption);
@@ -262,8 +326,8 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
         }
 
         while (!addEntry(keyBucket, insertionIndex, isNew, keyToInsert, value)) {
-          bucketSearchResult = splitBucket(keyBucket, keyBucketCacheEntry, bucketSearchResult.path, insertionIndex, key,
-              atomicOperation);
+          bucketSearchResult = splitBucket(keyBucket, keyBucketCacheEntry, bucketSearchResult.path,
+              bucketSearchResult.pointersIndexes, insertionIndex, key, atomicOperation);
 
           insertionIndex = bucketSearchResult.itemIndex;
 
@@ -513,6 +577,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           return false;
         }
 
+        //TODO: fix remove
         removed = removeKey(atomicOperation, value, bucketSearchResult);
       } else {
         if (getFilledUpTo(atomicOperation, nullBucketFileId) == 0) {
@@ -1041,8 +1106,8 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
     return keyFrom;
   }
 
-  private BucketSearchResult splitBucket(OSBTreeBucketMultiValue<K> bucketToSplit, OCacheEntry entryToSplit, List<Long> path,
-      int keyIndex, K keyToInsert, OAtomicOperation atomicOperation) throws IOException {
+  private UpdateBucketSearchResult splitBucket(OSBTreeBucketMultiValue<K> bucketToSplit, OCacheEntry entryToSplit, List<Long> path,
+      List<Integer> itemPointers, int keyIndex, K keyToInsert, OAtomicOperation atomicOperation) throws IOException {
     final boolean splitLeaf = bucketToSplit.isLeaf();
     final int bucketSize = bucketToSplit.size();
 
@@ -1055,8 +1120,17 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
     final int startRightIndex = splitLeaf ? indexToSplit : indexToSplit + 1;
 
     if (splitLeaf) {
-      for (int i = startRightIndex; i < bucketSize; i++) {
-        rightEntries.add(bucketToSplit.getLeafEntry(i));
+      if (bucketSize == 1) {
+        final OSBTreeBucketMultiValue.LeafEntry currentEntry = bucketToSplit.getLeafEntry(0);
+        final List<ORID> values = currentEntry.values;
+
+        final OSBTreeBucketMultiValue.LeafEntry rightEntry = new OSBTreeBucketMultiValue.LeafEntry(currentEntry.key,
+            values.subList(0, values.size() / 2));
+        rightEntries.add(rightEntry);
+      } else {
+        for (int i = startRightIndex; i < bucketSize; i++) {
+          rightEntries.add(bucketToSplit.getLeafEntry(i));
+        }
       }
     } else {
       for (int i = startRightIndex; i < bucketSize; i++) {
@@ -1065,10 +1139,10 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
     }
 
     if (entryToSplit.getPageIndex() != ROOT_INDEX) {
-      return splitNonRootBucket(path, keyIndex, keyToInsert, entryToSplit.getPageIndex(), bucketToSplit, splitLeaf, indexToSplit,
-          separationKey, serializedSeparationKey, rightEntries, atomicOperation);
+      return splitNonRootBucket(path, itemPointers, keyIndex, keyToInsert, entryToSplit.getPageIndex(), bucketToSplit, splitLeaf,
+          indexToSplit, separationKey, serializedSeparationKey, rightEntries, atomicOperation);
     } else {
-      return splitRootBucket(path, keyIndex, keyToInsert, entryToSplit, bucketToSplit, splitLeaf, indexToSplit, separationKey,
+      return splitRootBucket(keyIndex, keyToInsert, entryToSplit, bucketToSplit, splitLeaf, indexToSplit, separationKey,
           serializedSeparationKey, rightEntries, atomicOperation);
     }
   }
@@ -1097,8 +1171,8 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
     return keySerializer.deserializeNativeObject(decrypted, 0);
   }
 
-  private BucketSearchResult splitNonRootBucket(List<Long> path, int keyIndex, K keyToInsert, long pageIndex,
-      OSBTreeBucketMultiValue<K> bucketToSplit, boolean splitLeaf, int indexToSplit, K separationKey,
+  private UpdateBucketSearchResult splitNonRootBucket(List<Long> path, List<Integer> itemPointers, int keyIndex, K keyToInsert,
+      long pageIndex, OSBTreeBucketMultiValue<K> bucketToSplit, boolean splitLeaf, int indexToSplit, K separationKey,
       byte[] serializedSeparationKey, List<OSBTreeBucketMultiValue.Entry> rightEntries, OAtomicOperation atomicOperation)
       throws IOException {
     OCacheEntry rightBucketEntry = addPage(atomicOperation, fileId);
@@ -1108,7 +1182,11 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           encryption);
       newRightBucket.addAll(rightEntries);
 
-      bucketToSplit.shrink(indexToSplit);
+      if (bucketToSplit.size() > 1) {
+        bucketToSplit.shrink(indexToSplit);
+      } else {
+        bucketToSplit.halfSingleEntry();
+      }
 
       if (splitLeaf) {
         long rightSiblingPageIndex = bucketToSplit.getRightSibling();
@@ -1134,16 +1212,14 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
       OCacheEntry parentCacheEntry = loadPageForWrite(atomicOperation, fileId, parentIndex, false);
       try {
         OSBTreeBucketMultiValue<K> parentBucket = new OSBTreeBucketMultiValue<>(parentCacheEntry, keySerializer, encryption);
-        int insertionIndex = parentBucket.find(separationKey);
-        assert insertionIndex < 0;
-
-        insertionIndex = -insertionIndex - 1;
+        int insertionIndex = itemPointers.get(itemPointers.size() - 2) + 1;
 
         while (!parentBucket
             .addNonLeafEntry(insertionIndex, serializedSeparationKey, (int) pageIndex, (int) rightBucketEntry.getPageIndex(),
                 true)) {
-          BucketSearchResult bucketSearchResult = splitBucket(parentBucket, parentCacheEntry, path.subList(0, path.size() - 1),
-              insertionIndex, separationKey, atomicOperation);
+          UpdateBucketSearchResult bucketSearchResult = splitBucket(parentBucket, parentCacheEntry,
+              path.subList(0, path.size() - 1), itemPointers.subList(0, itemPointers.size() - 1), insertionIndex, separationKey,
+              atomicOperation);
 
           parentIndex = bucketSearchResult.getLastPathItem();
           insertionIndex = bucketSearchResult.itemIndex;
@@ -1165,22 +1241,29 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
     }
 
     ArrayList<Long> resultPath = new ArrayList<>(path.subList(0, path.size() - 1));
+    ArrayList<Integer> resultItemPointers = new ArrayList<>(itemPointers.subList(0, itemPointers.size() - 1));
 
     if (comparator.compare(keyToInsert, separationKey) < 0) {
       resultPath.add(pageIndex);
-      return new BucketSearchResult(keyIndex, resultPath);
+      resultItemPointers.add(keyIndex);
+
+      return new UpdateBucketSearchResult(resultItemPointers, resultPath, keyIndex);
     }
 
+    final int parentIndex = resultItemPointers.size() - 1;
+    resultItemPointers.set(parentIndex, resultItemPointers.get(parentIndex) + 1);
     resultPath.add(rightBucketEntry.getPageIndex());
+
     if (splitLeaf) {
-      return new BucketSearchResult(keyIndex - indexToSplit, resultPath);
+      resultItemPointers.add(keyIndex - indexToSplit);
+      return new UpdateBucketSearchResult(resultItemPointers, resultPath, keyIndex - indexToSplit);
     }
 
-    resultPath.add(rightBucketEntry.getPageIndex());
-    return new BucketSearchResult(keyIndex - indexToSplit - 1, resultPath);
+    resultItemPointers.add(keyIndex - indexToSplit - 1);
+    return new UpdateBucketSearchResult(resultItemPointers, resultPath, keyIndex - indexToSplit - 1);
   }
 
-  private BucketSearchResult splitRootBucket(List<Long> path, int keyIndex, K keyToInsert, OCacheEntry bucketEntry,
+  private UpdateBucketSearchResult splitRootBucket(int keyIndex, K keyToInsert, OCacheEntry bucketEntry,
       OSBTreeBucketMultiValue<K> bucketToSplit, boolean splitLeaf, int indexToSplit, K separationKey,
       byte[] serializedSeparationKey, List<OSBTreeBucketMultiValue.Entry> rightEntries, OAtomicOperation atomicOperation)
       throws IOException {
@@ -1188,8 +1271,18 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
     final List<OSBTreeBucketMultiValue.Entry> leftEntries = new ArrayList<>(indexToSplit);
 
     if (splitLeaf) {
-      for (int i = 0; i < indexToSplit; i++) {
-        leftEntries.add(bucketToSplit.getLeafEntry(i));
+      if (bucketToSplit.size() > 1) {
+        for (int i = 0; i < indexToSplit; i++) {
+          leftEntries.add(bucketToSplit.getLeafEntry(i));
+        }
+      } else {
+        final OSBTreeBucketMultiValue.LeafEntry currentEntry = bucketToSplit.getLeafEntry(0);
+        final List<ORID> values = currentEntry.values;
+
+        final OSBTreeBucketMultiValue.LeafEntry newEntry = new OSBTreeBucketMultiValue.LeafEntry(currentEntry.key,
+            currentEntry.values.subList(values.size() / 2, values.size()));
+
+        leftEntries.add(newEntry);
       }
     } else {
       for (int i = 0; i < indexToSplit; i++) {
@@ -1232,20 +1325,29 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
         .addNonLeafEntry(0, serializedSeparationKey, (int) leftBucketEntry.getPageIndex(), (int) rightBucketEntry.getPageIndex(),
             true);
 
-    ArrayList<Long> resultPath = new ArrayList<>(path.subList(0, path.size() - 1));
+    ArrayList<Long> resultPath = new ArrayList<>();
+    resultPath.add(ROOT_INDEX);
+
+    ArrayList<Integer> itemPointers = new ArrayList<>();
 
     if (comparator.compare(keyToInsert, separationKey) < 0) {
+      itemPointers.add(-1);
+      itemPointers.add(keyIndex);
+
       resultPath.add(leftBucketEntry.getPageIndex());
-      return new BucketSearchResult(keyIndex, resultPath);
+      return new UpdateBucketSearchResult(itemPointers, resultPath, keyIndex);
     }
 
     resultPath.add(rightBucketEntry.getPageIndex());
+    itemPointers.add(0);
 
     if (splitLeaf) {
-      return new BucketSearchResult(keyIndex - indexToSplit, resultPath);
+      itemPointers.add(keyIndex - indexToSplit);
+      return new UpdateBucketSearchResult(itemPointers, resultPath, keyIndex - indexToSplit);
     }
 
-    return new BucketSearchResult(keyIndex - indexToSplit - 1, resultPath);
+    itemPointers.add(keyIndex - indexToSplit - 1);
+    return new UpdateBucketSearchResult(itemPointers, resultPath, keyIndex - indexToSplit - 1);
   }
 
   private BucketSearchResult findBucket(K key, OAtomicOperation atomicOperation) throws IOException {
@@ -1278,6 +1380,50 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           } else {
             pageIndex = keyBucket.getLeft(insertionIndex);
           }
+        }
+      } finally {
+        releasePageFromRead(atomicOperation, bucketEntry);
+      }
+    }
+  }
+
+  private UpdateBucketSearchResult findBucketForUpdate(K key, OAtomicOperation atomicOperation) throws IOException {
+    long pageIndex = ROOT_INDEX;
+
+    final ArrayList<Long> path = new ArrayList<>();
+    final ArrayList<Integer> itemIndexes = new ArrayList<>();
+
+    while (true) {
+      if (path.size() > MAX_PATH_LENGTH) {
+        throw new OSBTreeMultiValueException(
+            "We reached max level of depth of SBTree but still found nothing, seems like tree is in corrupted state. You should rebuild index related to given query.",
+            this);
+      }
+
+      path.add(pageIndex);
+      final OCacheEntry bucketEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
+      try {
+        final OSBTreeBucketMultiValue<K> keyBucket = new OSBTreeBucketMultiValue<>(bucketEntry, keySerializer, encryption);
+        final int index = keyBucket.find(key);
+
+        if (keyBucket.isLeaf()) {
+          itemIndexes.add(index);
+          return new UpdateBucketSearchResult(itemIndexes, path, index);
+        }
+
+        if (index >= 0) {
+          pageIndex = keyBucket.getRight(index);
+          itemIndexes.add(index);
+        } else {
+          final int insertionIndex = -index - 1;
+
+          if (insertionIndex >= keyBucket.size()) {
+            pageIndex = keyBucket.getRight(insertionIndex - 1);
+          } else {
+            pageIndex = keyBucket.getLeft(insertionIndex);
+          }
+
+          itemIndexes.add(insertionIndex - 1);
         }
       } finally {
         releasePageFromRead(atomicOperation, bucketEntry);
@@ -1349,6 +1495,22 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
     private BucketSearchResult(int itemIndex, ArrayList<Long> path) {
       this.itemIndex = itemIndex;
       this.path = path;
+    }
+
+    long getLastPathItem() {
+      return path.get(path.size() - 1);
+    }
+  }
+
+  private static class UpdateBucketSearchResult {
+    private final List<Integer>   pointersIndexes;
+    private final ArrayList<Long> path;
+    private final int             itemIndex;
+
+    private UpdateBucketSearchResult(List<Integer> pointersIndexes, ArrayList<Long> path, int itemIndex) {
+      this.pointersIndexes = pointersIndexes;
+      this.path = path;
+      this.itemIndex = itemIndex;
     }
 
     long getLastPathItem() {
@@ -1508,6 +1670,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             bucketSearchResult = firstItem(atomicOperation);
           }
 
+          //TODO: fix iteration and first item
           if (bucketSearchResult == null) {
             dataCacheIterator = null;
             return null;
@@ -1522,7 +1685,9 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             itemIndex = -bucketSearchResult.itemIndex - 1;
           }
 
-          while (dataCache.size() < prefetchSize) {
+          K lastKey = null;
+
+          while (true) {
             if (pageIndex == -1) {
               break;
             }
@@ -1541,6 +1706,9 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
               itemIndex++;
 
               final K key = deserializeKey(leafEntry.key);
+              if (dataCache.size() >= prefetchSize && (lastKey == null || !lastKey.equals(key))) {
+                break;
+              }
 
               if (fromKey != null && (fromKeyInclusive ?
                   comparator.compare(key, fromKey) < 0 :
@@ -1552,6 +1720,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
                 break;
               }
 
+              lastKey = key;
               for (final ORID rid : leafEntry.values) {
                 dataCache.add(new Map.Entry<K, ORID>() {
                   @Override
@@ -1654,6 +1823,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             bucketSearchResult = lastItem(atomicOperation);
           }
 
+          //TODO: fix iteration and last item
           if (bucketSearchResult == null) {
             dataCacheIterator = null;
             return null;
@@ -1668,7 +1838,8 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             itemIndex = -bucketSearchResult.itemIndex - 2;
           }
 
-          while (dataCache.size() < prefetchSize) {
+          K lastKey = null;
+          while (true) {
             if (pageIndex == -1) {
               break;
             }
@@ -1691,6 +1862,9 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
               itemIndex--;
 
               final K key = deserializeKey(leafEntry.key);
+              if (dataCache.size() >= prefetchSize && (lastKey == null || !lastKey.equals(key))) {
+                break;
+              }
 
               if (toKey != null && (toKeyInclusive ? comparator.compare(key, toKey) > 0 : comparator.compare(key, toKey) >= 0)) {
                 continue;
@@ -1701,6 +1875,8 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
                   comparator.compare(key, fromKey) <= 0)) {
                 break;
               }
+
+              lastKey = key;
 
               for (final ORID rid : leafEntry.values) {
                 dataCache.add(new Map.Entry<K, ORID>() {

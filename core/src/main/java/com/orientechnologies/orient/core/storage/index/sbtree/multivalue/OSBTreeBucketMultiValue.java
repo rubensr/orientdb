@@ -469,6 +469,59 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
     }
   }
 
+  void halfSingleEntry() {
+    assert size() == 1;
+
+    final int entryPosition = getIntValue(POSITIONS_ARRAY_OFFSET);
+    final List<Integer> items = new ArrayList<>();
+    items.add(entryPosition);
+
+    int nextItem = entryPosition;
+    while (true) {
+      final int nextNextItem = getIntValue(nextItem);
+      if (nextNextItem != -1) {
+        items.add(nextNextItem);
+      } else {
+        break;
+      }
+
+      nextItem = nextNextItem;
+    }
+
+    final int size = items.size();
+    final int halfIndex = size / 2;
+    final List<Integer> itemsToRemove = items.subList(1, halfIndex + 1);
+
+    final int lastItemPos = items.get(halfIndex);
+
+    final int nextFirsItem = getIntValue(lastItemPos);
+    final byte[] firstRid = getBinaryValue(lastItemPos + OIntegerSerializer.INT_SIZE, RID_SIZE);
+
+    int freePointer = getIntValue(FREE_POINTER_OFFSET);
+
+    for (int itemPos : itemsToRemove) {
+      if (itemPos > freePointer) {
+        moveData(freePointer, freePointer + OIntegerSerializer.INT_SIZE + RID_SIZE, nextItem - freePointer);
+      }
+
+      freePointer += OIntegerSerializer.INT_SIZE + RID_SIZE;
+    }
+
+    setIntValue(FREE_POINTER_OFFSET, freePointer);
+
+    setIntValue(entryPosition, nextFirsItem);
+
+    final int keySize;
+    if (encryption == null) {
+      keySize = getObjectSizeInDirectMemory(keySerializer, entryPosition + OIntegerSerializer.INT_SIZE);
+    } else {
+      final int encryptedSize = getIntValue(entryPosition + OIntegerSerializer.INT_SIZE);
+      keySize = OIntegerSerializer.INT_SIZE + encryptedSize;
+    }
+
+    setBinaryValue(entryPosition + OIntegerSerializer.INT_SIZE + keySize, firstRid);
+  }
+
   boolean addNewLeafEntry(final int index, final byte[] serializedKey, final ORID value) {
     assert isLeaf;
 
