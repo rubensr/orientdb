@@ -577,8 +577,76 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           return false;
         }
 
-        //TODO: fix remove
-        removed = removeKey(atomicOperation, value, bucketSearchResult);
+        final long pageIndex = bucketSearchResult.pageIndex;
+        final int itemIndex = bucketSearchResult.itemIndex;
+
+        long leftSibling = -1;
+        long rightSibling = -1;
+
+        OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
+        try {
+          final OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
+
+          if (itemIndex == 0) {
+            leftSibling = bucket.getLeftSibling();
+          }
+
+          if (itemIndex == bucket.size() - 1) {
+            rightSibling = bucket.getRightSibling();
+          }
+
+          removed = bucket.remove(itemIndex, value);
+        } finally {
+          releasePageFromRead(atomicOperation, cacheEntry);
+        }
+
+        while (leftSibling >= 0) {
+          cacheEntry = loadPageForRead(atomicOperation, fileId, leftSibling, false);
+          try {
+            OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
+            final int size = bucket.size();
+
+            if (size > 0) {
+              if (bucket.remove(size - 1, value)) {
+                removed = true;
+              }
+
+              if (size == 1) {
+                leftSibling = bucket.getLeftSibling();
+              } else {
+                leftSibling = -1;
+              }
+            } else {
+              leftSibling = bucket.getLeftSibling();
+            }
+          } finally {
+            releasePageFromRead(atomicOperation, cacheEntry);
+          }
+        }
+
+        while (rightSibling >= 0) {
+          cacheEntry = loadPageForRead(atomicOperation, fileId, rightSibling, false);
+          try {
+            OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
+            final int size = bucket.size();
+
+            if (size > 0) {
+              if (bucket.remove(0, value)) {
+                removed = true;
+              }
+
+              if (size == 1) {
+                rightSibling = bucket.getRightSibling();
+              } else {
+                rightSibling = -1;
+              }
+            } else {
+              rightSibling = bucket.getRightSibling();
+            }
+          } finally {
+            releasePageFromRead(atomicOperation, cacheEntry);
+          }
+        }
       } else {
         if (getFilledUpTo(atomicOperation, nullBucketFileId) == 0) {
           endAtomicOperation(false, null);
