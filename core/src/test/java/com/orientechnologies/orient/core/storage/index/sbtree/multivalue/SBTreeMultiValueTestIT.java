@@ -208,6 +208,33 @@ public class SBTreeMultiValueTestIT {
   }
 
   @Test
+  public void testKeyPutThousandSameKeys() {
+    final int itemsCount = 20_000;
+
+    final String[] keys = new String[1_000];
+    for (int i = 0; i < keys.length; i++) {
+      keys[i] = "test_key_" + i;
+    }
+
+    for (int i = 0; i < itemsCount; i++) {
+      for (String key : keys) {
+        multiValueTree.put(key, new ORecordId(i % 32000, i));
+      }
+    }
+
+    for (String key : keys) {
+      List<ORID> result = multiValueTree.get(key);
+
+      Assert.assertEquals(itemsCount, result.size());
+      Set<ORID> resultSet = new HashSet<>(result);
+
+      for (int i = 0; i < itemsCount; i++) {
+        Assert.assertTrue(resultSet.contains(new ORecordId(i % 32000, i)));
+      }
+    }
+  }
+
+  @Test
   public void testKeyPut() {
     final int keysCount = 1_000_000;
 

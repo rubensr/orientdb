@@ -188,7 +188,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             return Collections.emptyList();
           }
 
-          final long pageIndex = bucketSearchResult.getLastPathItem();
+          final long pageIndex = bucketSearchResult.pageIndex;
           final int itemIndex = bucketSearchResult.itemIndex;
 
           long leftSibling = -1;
@@ -624,7 +624,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
   private boolean removeKey(OAtomicOperation atomicOperation, ORID value, BucketSearchResult bucketSearchResult)
       throws IOException {
     final boolean removed;
-    OCacheEntry keyBucketCacheEntry = loadPageForWrite(atomicOperation, fileId, bucketSearchResult.getLastPathItem(), false);
+    OCacheEntry keyBucketCacheEntry = loadPageForWrite(atomicOperation, fileId, bucketSearchResult.pageIndex, false);
     try {
       OSBTreeBucketMultiValue<K> keyBucket = new OSBTreeBucketMultiValue<>(keyBucketCacheEntry, keySerializer, encryption);
 
@@ -687,7 +687,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           return null;
         }
 
-        final OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, searchResult.getLastPathItem(), false);
+        final OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, searchResult.pageIndex, false);
         try {
           OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
           return bucket.getKey(searchResult.itemIndex);
@@ -717,7 +717,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           return null;
         }
 
-        final OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, searchResult.getLastPathItem(), false);
+        final OCacheEntry cacheEntry = loadPageForRead(atomicOperation, fileId, searchResult.pageIndex, false);
         try {
           OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
           return bucket.getKey(searchResult.itemIndex);
@@ -746,7 +746,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           return prefetchSize -> null;
         }
 
-        return new OSBTreeFullKeyCursor(searchResult.getLastPathItem());
+        return new OSBTreeFullKeyCursor(searchResult.pageIndex);
       } finally {
         releaseSharedLock();
       }
@@ -948,13 +948,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
               return null;
             }
           } else {
-            final ArrayList<Long> resultPath = new ArrayList<>(path.size() + 1);
-            for (PagePathItemUnit pathItemUnit : path) {
-              resultPath.add(pathItemUnit.pageIndex);
-            }
-
-            resultPath.add(bucketIndex);
-            return new BucketSearchResult(0, resultPath);
+            return new BucketSearchResult(0, bucketIndex);
           }
         }
 
@@ -1013,14 +1007,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
               return null;
             }
           } else {
-            final ArrayList<Long> resultPath = new ArrayList<>(path.size() + 1);
-            for (PagePathItemUnit pathItemUnit : path) {
-              resultPath.add(pathItemUnit.pageIndex);
-            }
-
-            resultPath.add(bucketIndex);
-
-            return new BucketSearchResult(bucket.size() - 1, resultPath);
+            return new BucketSearchResult(bucket.size() - 1, bucketIndex);
           }
         }
 
@@ -1352,23 +1339,23 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
 
   private BucketSearchResult findBucket(K key, OAtomicOperation atomicOperation) throws IOException {
     long pageIndex = ROOT_INDEX;
-    final ArrayList<Long> path = new ArrayList<>();
 
+    int depth = 0;
     while (true) {
-      if (path.size() > MAX_PATH_LENGTH) {
+      depth++;
+      if (depth > MAX_PATH_LENGTH) {
         throw new OSBTreeMultiValueException(
             "We reached max level of depth of SBTree but still found nothing, seems like tree is in corrupted state. You should rebuild index related to given query.",
             this);
       }
 
-      path.add(pageIndex);
       final OCacheEntry bucketEntry = loadPageForRead(atomicOperation, fileId, pageIndex, false);
       try {
         final OSBTreeBucketMultiValue<K> keyBucket = new OSBTreeBucketMultiValue<>(bucketEntry, keySerializer, encryption);
         final int index = keyBucket.find(key);
 
         if (keyBucket.isLeaf()) {
-          return new BucketSearchResult(index, path);
+          return new BucketSearchResult(index, pageIndex);
         }
 
         if (index >= 0) {
@@ -1489,16 +1476,12 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
   }
 
   private static class BucketSearchResult {
-    private final int             itemIndex;
-    private final ArrayList<Long> path;
+    private final int  itemIndex;
+    private final long pageIndex;
 
-    private BucketSearchResult(int itemIndex, ArrayList<Long> path) {
+    private BucketSearchResult(int itemIndex, long pageIndex) {
       this.itemIndex = itemIndex;
-      this.path = path;
-    }
-
-    long getLastPathItem() {
-      return path.get(path.size() - 1);
+      this.pageIndex = pageIndex;
     }
   }
 
@@ -1676,7 +1659,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             return null;
           }
 
-          long pageIndex = bucketSearchResult.getLastPathItem();
+          long pageIndex = bucketSearchResult.pageIndex;
           int itemIndex;
 
           if (bucketSearchResult.itemIndex >= 0) {
@@ -1829,7 +1812,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             return null;
           }
 
-          long pageIndex = bucketSearchResult.getLastPathItem();
+          long pageIndex = bucketSearchResult.pageIndex;
 
           int itemIndex;
           if (bucketSearchResult.itemIndex >= 0) {
