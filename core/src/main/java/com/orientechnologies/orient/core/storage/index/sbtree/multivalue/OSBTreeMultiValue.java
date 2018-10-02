@@ -600,7 +600,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           releasePageFromRead(atomicOperation, cacheEntry);
         }
 
-        while (leftSibling >= 0) {
+        while (!removed && leftSibling >= 0) {
           cacheEntry = loadPageForRead(atomicOperation, fileId, leftSibling, false);
           try {
             OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
@@ -624,7 +624,7 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           }
         }
 
-        while (rightSibling >= 0) {
+        while (!removed && rightSibling >= 0) {
           cacheEntry = loadPageForRead(atomicOperation, fileId, rightSibling, false);
           try {
             OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
@@ -646,6 +646,10 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
           } finally {
             releasePageFromRead(atomicOperation, cacheEntry);
           }
+        }
+
+        if (removed) {
+          updateSize(-1, atomicOperation);
         }
       } else {
         if (getFilledUpTo(atomicOperation, nullBucketFileId) == 0) {
@@ -684,24 +688,6 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
 
     if (removed) {
       updateSize(-1, atomicOperation);
-    }
-
-    return removed;
-  }
-
-  private boolean removeKey(OAtomicOperation atomicOperation, ORID value, BucketSearchResult bucketSearchResult)
-      throws IOException {
-    final boolean removed;
-    OCacheEntry keyBucketCacheEntry = loadPageForWrite(atomicOperation, fileId, bucketSearchResult.pageIndex, false);
-    try {
-      OSBTreeBucketMultiValue<K> keyBucket = new OSBTreeBucketMultiValue<>(keyBucketCacheEntry, keySerializer, encryption);
-
-      removed = keyBucket.remove(bucketSearchResult.itemIndex, value);
-      if (removed) {
-        updateSize(-1, atomicOperation);
-      }
-    } finally {
-      releasePageFromWrite(atomicOperation, keyBucketCacheEntry);
     }
 
     return removed;
