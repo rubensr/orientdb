@@ -35,7 +35,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.index.OAlwaysGreaterKey;
 import com.orientechnologies.orient.core.index.OAlwaysLessKey;
 import com.orientechnologies.orient.core.index.OCompositeKey;
-import com.orientechnologies.orient.core.index.OIndexEngine;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.iterator.OEmptyIterator;
 import com.orientechnologies.orient.core.iterator.OEmptyMapEntryIterator;
 import com.orientechnologies.orient.core.metadata.schema.OType;
@@ -229,12 +229,12 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
     update(key, value, null);
   }
 
-  public boolean validatedPut(K key, ORID value, OIndexEngine.Validator<K, ORID> validator) {
+  public boolean validatedPut(K key, ORID value, OBaseIndexEngine.Validator<K, ORID> validator) {
     return update(key, value, validator);
   }
 
   @SuppressWarnings("unchecked")
-  public boolean update(K key, ORID value, OIndexEngine.Validator<K, ORID> validator) {
+  public boolean update(K key, ORID value, OBaseIndexEngine.Validator<K, ORID> validator) {
     final OAtomicOperation atomicOperation;
     try {
       atomicOperation = startAtomicOperation(true);
@@ -280,7 +280,7 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
           try {
 
             final Object result = validator.validate(key, oldValue, value);
-            if (result == OIndexEngine.Validator.IGNORE) {
+            if (result == OBaseIndexEngine.Validator.IGNORE) {
               ignored = true;
               failure = false;
               return false;
@@ -378,7 +378,7 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
 
           if (validator != null) {
             final Object result = validator.validate(null, oldValue, value);
-            if (result == OIndexEngine.Validator.IGNORE) {
+            if (result == OBaseIndexEngine.Validator.IGNORE) {
               ignored = true;
               return false;
             }

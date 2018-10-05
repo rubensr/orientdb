@@ -17,12 +17,17 @@ package com.orientechnologies.orient.core.index;
 
 import com.orientechnologies.common.util.OCollections;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
-import com.orientechnologies.orient.core.storage.index.hashindex.local.OHashIndexFactory;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorage;
+import com.orientechnologies.orient.core.storage.index.hashindex.local.OHashIndexFactory;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 
 import static com.orientechnologies.common.util.OClassLoaderHelper.lookupProviderWithOrientClassLoader;
 
@@ -166,7 +171,7 @@ public final class OIndexes {
             .toString(getIndexTypes()));
   }
 
-  public static OIndexEngine createIndexEngine(final String name, final String algorithm, final String type,
+  public static OBaseIndexEngine createIndexEngine(final String name, final String algorithm, final String type,
       final Boolean durableInNonTxMode, final OStorage storage, final int version, final Map<String, String> indexProperties,
       ODocument metadata) {
 

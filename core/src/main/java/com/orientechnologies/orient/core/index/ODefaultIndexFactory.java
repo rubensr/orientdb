@@ -16,6 +16,8 @@
 package com.orientechnologies.orient.core.index;
 
 import com.orientechnologies.orient.core.exception.OConfigurationException;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
+import com.orientechnologies.orient.core.index.engine.OIndexEngine;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorage;
@@ -141,7 +143,8 @@ public class ODefaultIndexFactory implements OIndexFactory {
   }
 
   @Override
-  public OIndexEngine createIndexEngine(String algorithm, String name, Boolean durableInNonTxMode, OStorage storage, int version,
+  public OBaseIndexEngine createIndexEngine(String algorithm, String name, Boolean durableInNonTxMode, OStorage storage,
+      int version,
       Map<String, String> engineProperties) {
 
     final OIndexEngine indexEngine;

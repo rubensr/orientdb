@@ -1713,7 +1713,6 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             bucketSearchResult = firstItem(atomicOperation);
           }
 
-          //TODO: fix iteration and first item
           if (bucketSearchResult == null) {
             dataCacheIterator = null;
             return null;
@@ -1866,7 +1865,6 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
             bucketSearchResult = lastItem(atomicOperation);
           }
 
-          //TODO: fix iteration and last item
           if (bucketSearchResult == null) {
             dataCacheIterator = null;
             return null;

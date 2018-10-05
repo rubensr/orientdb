@@ -34,6 +34,7 @@ import com.orientechnologies.orient.core.exception.OCommandExecutionException;
 import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.core.exception.OInvalidIndexEngineIdException;
 import com.orientechnologies.orient.core.exception.OTooBigIndexKeyException;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.intent.OIntentMassiveInsert;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.ORecord;
@@ -889,27 +890,31 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
 
   @Override
   public String getIndexNameByKey(final Object key) {
-    OIndexEngine engine;
-    while (true)
+    OBaseIndexEngine engine;
+
+    while (true) {
       try {
         engine = storage.getIndexEngine(indexId);
         break;
       } catch (OInvalidIndexEngineIdException ignore) {
         doReloadIndexEngine();
       }
+    }
     return engine.getIndexNameByKey(key);
   }
 
   @Override
   public boolean acquireAtomicExclusiveLock(Object key) {
-    OIndexEngine engine;
-    while (true)
+    OBaseIndexEngine engine;
+
+    while (true) {
       try {
         engine = storage.getIndexEngine(indexId);
         break;
       } catch (OInvalidIndexEngineIdException ignore) {
         doReloadIndexEngine();
       }
+    }
 
     return engine.acquireAtomicExclusiveLock(key);
   }

@@ -26,6 +26,7 @@ import com.orientechnologies.common.types.OModifiableBoolean;
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OInvalidIndexEngineIdException;
 import com.orientechnologies.orient.core.id.ORID;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.iterator.OEmptyIterator;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.serialization.serializer.stream.OMixedIndexRIDContainerSerializer;
@@ -306,7 +307,7 @@ public abstract class OIndexMultiValues extends OIndexAbstract<Set<OIdentifiable
     return new OIndexAbstractCursor() {
       private Iterator<?> keysIterator = sortedKeys.iterator();
 
-      private Iterator<OIdentifiable> currentIterator = OEmptyIterator.IDENTIFIABLE_INSTANCE;
+      private Iterator<ORID> currentIterator = OEmptyIterator.IDENTIFIABLE_INSTANCE;
       private Object currentKey;
 
       @Override
@@ -316,7 +317,7 @@ public abstract class OIndexMultiValues extends OIndexAbstract<Set<OIdentifiable
 
         Object key = null;
         if (!currentIterator.hasNext()) {
-          Collection<OIdentifiable> result = null;
+          Collection<ORID> result = null;
           while (keysIterator.hasNext() && (result == null || result.isEmpty())) {
             key = keysIterator.next();
             key = getCollatingValue(key);
@@ -325,7 +326,7 @@ public abstract class OIndexMultiValues extends OIndexAbstract<Set<OIdentifiable
             try {
               while (true)
                 try {
-                  result = (Collection<OIdentifiable>) storage.getIndexValue(indexId, key);
+                  result = (Collection<ORID>) storage.getIndexValue(indexId, key);
                   break;
                 } catch (OInvalidIndexEngineIdException ignore) {
                   doReloadIndexEngine();
@@ -429,12 +430,12 @@ public abstract class OIndexMultiValues extends OIndexAbstract<Set<OIdentifiable
     }
   }
 
-  private static final class MultiValuesTransformer implements OIndexEngine.ValuesTransformer {
+  private static final class MultiValuesTransformer implements OBaseIndexEngine.ValuesTransformer {
     private static final MultiValuesTransformer INSTANCE = new MultiValuesTransformer();
 
     @Override
-    public Collection<OIdentifiable> transformFromValue(Object value) {
-      return (Collection<OIdentifiable>) value;
+    public Collection<ORID> transformFromValue(Object value) {
+      return (Collection<ORID>) value;
     }
   }
 

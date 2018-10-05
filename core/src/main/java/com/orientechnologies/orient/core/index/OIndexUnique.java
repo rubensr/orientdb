@@ -21,6 +21,7 @@ package com.orientechnologies.orient.core.index;
 
 import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.exception.OInvalidIndexEngineIdException;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.ORecordDuplicatedException;
 import com.orientechnologies.orient.core.storage.impl.local.OAbstractPaginatedStorage;
@@ -33,25 +34,22 @@ import com.orientechnologies.orient.core.tx.OTransactionIndexChangesPerKey;
  */
 public class OIndexUnique extends OIndexOneValue {
 
-  private final OIndexEngine.Validator<Object, OIdentifiable> UNIQUE_VALIDATOR = new OIndexEngine.Validator<Object, OIdentifiable>() {
-    @Override
-    public Object validate(Object key, OIdentifiable oldValue, OIdentifiable newValue) {
-      if (oldValue != null) {
-        // CHECK IF THE ID IS THE SAME OF CURRENT: THIS IS THE UPDATE CASE
-        if (!oldValue.equals(newValue)) {
-          final Boolean mergeSameKey = metadata != null ? (Boolean) metadata.field(OIndex.MERGE_KEYS) : Boolean.FALSE;
-          if (mergeSameKey == null || !mergeSameKey)
-            throw new ORecordDuplicatedException(String
-                .format("Cannot index record %s: found duplicated key '%s' in index '%s' previously assigned to the record %s",
-                    newValue.getIdentity(), key, getName(), oldValue.getIdentity()), getName(), oldValue.getIdentity(), key);
-        } else
-          return OIndexEngine.Validator.IGNORE;
-      }
-
-      if (!newValue.getIdentity().isPersistent())
-        newValue = newValue.getRecord();
-      return newValue.getIdentity();
+  private final OBaseIndexEngine.Validator<Object, OIdentifiable> UNIQUE_VALIDATOR = (key, oldValue, newValue) -> {
+    if (oldValue != null) {
+      // CHECK IF THE ID IS THE SAME OF CURRENT: THIS IS THE UPDATE CASE
+      if (!oldValue.equals(newValue)) {
+        final Boolean mergeSameKey = metadata != null ? (Boolean) metadata.field(OIndex.MERGE_KEYS) : Boolean.FALSE;
+        if (mergeSameKey == null || !mergeSameKey)
+          throw new ORecordDuplicatedException(String
+              .format("Cannot index record %s: found duplicated key '%s' in index '%s' previously assigned to the record %s",
+                  newValue.getIdentity(), key, getName(), oldValue.getIdentity()), getName(), oldValue.getIdentity(), key);
+      } else
+        return OBaseIndexEngine.Validator.IGNORE;
     }
+
+    if (!newValue.getIdentity().isPersistent())
+      newValue = newValue.getRecord();
+    return newValue.getIdentity();
   };
 
   public OIndexUnique(String name, String typeId, String algorithm, int version, OAbstractPaginatedStorage storage,

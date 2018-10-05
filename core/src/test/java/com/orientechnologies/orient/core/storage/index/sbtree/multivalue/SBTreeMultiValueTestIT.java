@@ -33,18 +33,19 @@ public class SBTreeMultiValueTestIT {
   protected String                    buildDirectory;
   protected OrientDB                  orientDB;
 
+  private final String DB_NAME = "localMultiBTreeTest";
+
   @Before
   public void before() {
     buildDirectory = System.getProperty("buildDirectory", ".") + File.separator + PrefixBTreeTestIT.class.getSimpleName();
 
-    String dbName = "localMultiBTreeTest";
-    final File dbDirectory = new File(buildDirectory, dbName);
+    final File dbDirectory = new File(buildDirectory, DB_NAME);
     OFileUtils.deleteRecursively(dbDirectory);
 
     orientDB = new OrientDB("plocal:" + buildDirectory, OrientDBConfig.defaultConfig());
-    orientDB.create(dbName, ODatabaseType.PLOCAL);
+    orientDB.create(DB_NAME, ODatabaseType.PLOCAL);
 
-    databaseDocumentTx = orientDB.open(dbName, "admin", "admin");
+    databaseDocumentTx = orientDB.open(DB_NAME, "admin", "admin");
 
     multiValueTree = new OSBTreeMultiValue<>("multiBTree", ".sbt", ".nbt",
         (OAbstractPaginatedStorage) ((ODatabaseInternal) databaseDocumentTx).getStorage());
@@ -53,8 +54,8 @@ public class SBTreeMultiValueTestIT {
 
   @After
   public void afterMethod() throws Exception {
-//    orientDB.drop(dbName);
-//    orientDB.close();
+    orientDB.drop(DB_NAME);
+    orientDB.close();
   }
 
   @Test
@@ -421,7 +422,7 @@ public class SBTreeMultiValueTestIT {
     long seed = System.nanoTime();
     System.out.println("testKeyPutRandomUniform : " + seed);
     final Random random = new Random(seed);
-    final int keysCount = 100_000_000;
+    final int keysCount = 1_000_000;
 
     while (keys.size() < keysCount) {
       int val = random.nextInt(Integer.MAX_VALUE);
@@ -463,7 +464,7 @@ public class SBTreeMultiValueTestIT {
 
   @Test
   public void testKeyDelete() {
-    final int keysCount = 100_000_000;
+    final int keysCount = 1_000_000;
 
     NavigableMap<String, Integer> keys = new TreeMap<>();
     for (int i = 0; i < keysCount; i++) {
@@ -514,7 +515,7 @@ public class SBTreeMultiValueTestIT {
 
   @Test
   public void testKeyAddDelete() {
-    final int keysCount = 100_000_000;
+    final int keysCount = 1_000_000;
 
     for (int i = 0; i < keysCount; i++) {
       multiValueTree.put(Integer.toString(i), new ORecordId(i % 32000, i));
@@ -556,7 +557,7 @@ public class SBTreeMultiValueTestIT {
 
   @Test
   public void testKeyCursor() {
-    final int keysCount = 100_000_000;
+    final int keysCount = 1_000_000;
 
     NavigableMap<String, ORID> keyValues = new TreeMap<>();
     final long seed = System.nanoTime();
@@ -585,7 +586,7 @@ public class SBTreeMultiValueTestIT {
 
   @Test
   public void testIterateEntriesMajor() {
-    final int keysCount = 100_000_000;
+    final int keysCount = 1_000_000;
 
     NavigableMap<String, Integer> keyValues = new TreeMap<>();
     final long seed = System.nanoTime();
@@ -619,7 +620,7 @@ public class SBTreeMultiValueTestIT {
 
   @Test
   public void testIterateEntriesMinor() {
-    final int keysCount = 100_000_000;
+    final int keysCount = 1_000_000;
     NavigableMap<String, Integer> keyValues = new TreeMap<>();
 
     final long seed = System.nanoTime();
@@ -653,7 +654,7 @@ public class SBTreeMultiValueTestIT {
 
   @Test
   public void testIterateEntriesBetween() {
-    final int keysCount = 100_000_000;
+    final int keysCount = 1_000_000;
     NavigableMap<String, Integer> keyValues = new TreeMap<>();
     Random random = new Random();
 

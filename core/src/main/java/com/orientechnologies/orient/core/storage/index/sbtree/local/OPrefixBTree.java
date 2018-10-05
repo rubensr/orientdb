@@ -27,9 +27,9 @@ import com.orientechnologies.common.serialization.types.OBinarySerializer;
 import com.orientechnologies.common.util.ORawPair;
 import com.orientechnologies.orient.core.config.OGlobalConfiguration;
 import com.orientechnologies.orient.core.encryption.OEncryption;
-import com.orientechnologies.orient.core.index.OIndexEngine;
 import com.orientechnologies.orient.core.index.OIndexKeyUpdater;
 import com.orientechnologies.orient.core.index.OIndexUpdateAction;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.iterator.OEmptyIterator;
 import com.orientechnologies.orient.core.iterator.OEmptyMapEntryIterator;
 import com.orientechnologies.orient.core.metadata.schema.OType;
@@ -217,11 +217,11 @@ public class OPrefixBTree<V> extends ODurableComponent {
     put(key, value, null);
   }
 
-  public boolean validatedPut(String key, V value, OIndexEngine.Validator<String, V> validator) {
+  public boolean validatedPut(String key, V value, OBaseIndexEngine.Validator<String, V> validator) {
     return put(key, value, validator);
   }
 
-  private boolean put(String key, V value, OIndexEngine.Validator<String, V> validator) {
+  private boolean put(String key, V value, OBaseIndexEngine.Validator<String, V> validator) {
     return update(key, (x, bonsayFileId) -> {
       final OIndexUpdateAction<V> changed = OIndexUpdateAction.changed(value);
       return changed;
@@ -229,7 +229,7 @@ public class OPrefixBTree<V> extends ODurableComponent {
   }
 
   @SuppressWarnings("unchecked")
-  public boolean update(String key, OIndexKeyUpdater<V> updater, OIndexEngine.Validator<String, V> validator) {
+  public boolean update(String key, OIndexKeyUpdater<V> updater, OBaseIndexEngine.Validator<String, V> validator) {
     final OAtomicOperation atomicOperation;
     try {
       atomicOperation = startAtomicOperation(true);
@@ -269,7 +269,7 @@ public class OPrefixBTree<V> extends ODurableComponent {
             try {
 
               final Object result = validator.validate(key, oldValue, value);
-              if (result == OIndexEngine.Validator.IGNORE) {
+              if (result == OBaseIndexEngine.Validator.IGNORE) {
                 ignored = true;
                 failure = false;
                 return false;
@@ -364,7 +364,7 @@ public class OPrefixBTree<V> extends ODurableComponent {
 
             if (validator != null) {
               final Object result = validator.validate(null, oldValueValue, value);
-              if (result == OIndexEngine.Validator.IGNORE) {
+              if (result == OBaseIndexEngine.Validator.IGNORE) {
                 ignored = true;
                 return false;
               }

@@ -189,7 +189,7 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
             }
 
             nextItem = getIntValue(updatedEntryPosition);
-            if (nextItem < entryPosition) {
+            if (nextItem > 0 && nextItem < entryPosition) {
               //update reference to the first item of linked list
               setIntValue(updatedEntryPosition, nextItem + entrySize);
 
@@ -234,7 +234,7 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
             }
 
             final int currentNextItem = getIntValue(updatedEntryPosition);
-            if (currentNextItem < nextItem) {
+            if (currentNextItem > 0 && currentNextItem < nextItem) {
               //update reference to the first item of linked list
               setIntValue(updatedEntryPosition, currentNextItem + LINKED_LIST_ITEM_SIZE);
 
@@ -278,7 +278,7 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
                 }
 
                 final int currentNextItem = getIntValue(updatedEntryPosition);
-                if (currentNextItem < nextItem) {
+                if (currentNextItem > 0 && currentNextItem < nextItem) {
                   //update reference to the first item of linked list
                   setIntValue(updatedEntryPosition, currentNextItem + LINKED_LIST_ITEM_SIZE);
 

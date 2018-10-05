@@ -33,6 +33,7 @@ import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordElement;
 import com.orientechnologies.orient.core.db.record.OTrackedSet;
 import com.orientechnologies.orient.core.id.ORecordId;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OClassImpl;
 import com.orientechnologies.orient.core.metadata.schema.OSchemaShared;
@@ -644,7 +645,7 @@ public class OIndexManagerShared extends OIndexManagerAbstract {
         for (Iterator<OIndexFactory> it = OIndexes.getAllFactories(); it.hasNext(); ) {
           try {
             final OIndexFactory indexFactory = it.next();
-            final OIndexEngine engine = indexFactory.createIndexEngine(null, index.getName(), false, storage, 0, null);
+            final OBaseIndexEngine engine = indexFactory.createIndexEngine(null, index.getName(), false, storage, 0, null);
 
             engine.deleteWithoutLoad(index.getName());
           } catch (Exception e2) {

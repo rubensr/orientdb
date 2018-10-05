@@ -16,12 +16,13 @@
 package com.orientechnologies.orient.core.sharding.auto;
 
 import com.orientechnologies.orient.core.exception.OConfigurationException;
-import com.orientechnologies.orient.core.index.OIndexEngine;
 import com.orientechnologies.orient.core.index.OIndexException;
 import com.orientechnologies.orient.core.index.OIndexFactory;
 import com.orientechnologies.orient.core.index.OIndexInternal;
 import com.orientechnologies.orient.core.index.OIndexNotUnique;
 import com.orientechnologies.orient.core.index.OIndexUnique;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
+import com.orientechnologies.orient.core.index.engine.OIndexEngine;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorage;
@@ -128,7 +129,7 @@ public class OAutoShardingIndexFactory implements OIndexFactory {
   }
 
   @Override
-  public OIndexEngine createIndexEngine(final String algorithm, final String name, final Boolean durableInNonTxMode,
+  public OBaseIndexEngine createIndexEngine(final String algorithm, final String name, final Boolean durableInNonTxMode,
       final OStorage storage, final int version, final Map<String, String> engineProperties) {
 
     final OIndexEngine indexEngine;

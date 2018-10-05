@@ -8,8 +8,9 @@ import com.orientechnologies.orient.core.encryption.OEncryption;
 import com.orientechnologies.orient.core.exception.OLocalHashTableException;
 import com.orientechnologies.orient.core.exception.OStorageException;
 import com.orientechnologies.orient.core.exception.OTooBigIndexKeyException;
-import com.orientechnologies.orient.core.index.OIndexEngine;
 import com.orientechnologies.orient.core.index.OIndexException;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
+import com.orientechnologies.orient.core.index.engine.OIndexEngine;
 import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.serialization.serializer.binary.OBinarySerializerFactory;
 import com.orientechnologies.orient.core.storage.cache.OCacheEntry;
@@ -369,7 +370,7 @@ public class OLocalHashTable<K, V> extends ODurableComponent implements OHashTab
   }
 
   @Override
-  public boolean validatedPut(K key, V value, OIndexEngine.Validator<K, V> validator) {
+  public boolean validatedPut(K key, V value, OBaseIndexEngine.Validator<K, V> validator) {
     return put(key, value, validator);
   }
 
@@ -1312,7 +1313,7 @@ public class OLocalHashTable<K, V> extends ODurableComponent implements OHashTab
     atomicOperationsManager.acquireExclusiveLockTillOperationComplete(this);
   }
 
-  private boolean put(K key, V value, OIndexEngine.Validator<K, V> validator) {
+  private boolean put(K key, V value, OBaseIndexEngine.Validator<K, V> validator) {
     final OAtomicOperation atomicOperation;
     try {
       atomicOperation = startAtomicOperation(true);
@@ -1371,7 +1372,7 @@ public class OLocalHashTable<K, V> extends ODurableComponent implements OHashTab
 
         if (validator != null) {
           final Object result = validator.validate(null, oldValue, value);
-          if (result == OIndexEngine.Validator.IGNORE)
+          if (result == OBaseIndexEngine.Validator.IGNORE)
             return false;
 
           value = (V) result;
@@ -1407,7 +1408,7 @@ public class OLocalHashTable<K, V> extends ODurableComponent implements OHashTab
         if (validator != null) {
           final V oldValue = index > -1 ? bucket.getValue(index) : null;
           final Object result = validator.validate(key, oldValue, value);
-          if (result == OIndexEngine.Validator.IGNORE)
+          if (result == OBaseIndexEngine.Validator.IGNORE)
             return false;
 
           value = (V) result;

@@ -31,9 +31,9 @@ import com.orientechnologies.orient.core.exception.OTooBigIndexKeyException;
 import com.orientechnologies.orient.core.index.OAlwaysGreaterKey;
 import com.orientechnologies.orient.core.index.OAlwaysLessKey;
 import com.orientechnologies.orient.core.index.OCompositeKey;
-import com.orientechnologies.orient.core.index.OIndexEngine;
 import com.orientechnologies.orient.core.index.OIndexKeyUpdater;
 import com.orientechnologies.orient.core.index.OIndexUpdateAction;
+import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.iterator.OEmptyIterator;
 import com.orientechnologies.orient.core.iterator.OEmptyMapEntryIterator;
 import com.orientechnologies.orient.core.metadata.schema.OType;
@@ -237,18 +237,18 @@ public class OSBTree<K, V> extends ODurableComponent {
     put(key, value, null);
   }
 
-  public boolean validatedPut(K key, V value, OIndexEngine.Validator<K, V> validator) {
+  public boolean validatedPut(K key, V value, OBaseIndexEngine.Validator<K, V> validator) {
     return put(key, value, validator);
   }
 
-  private boolean put(K key, V value, OIndexEngine.Validator<K, V> validator) {
+  private boolean put(K key, V value, OBaseIndexEngine.Validator<K, V> validator) {
     return update(key, (x, bonsayFileId) -> {
       return OIndexUpdateAction.changed(value);
     }, validator);
   }
 
   @SuppressWarnings("unchecked")
-  public boolean update(K key, OIndexKeyUpdater<V> updater, OIndexEngine.Validator<K, V> validator) {
+  public boolean update(K key, OIndexKeyUpdater<V> updater, OBaseIndexEngine.Validator<K, V> validator) {
     final OAtomicOperation atomicOperation;
     try {
       atomicOperation = startAtomicOperation(true);
@@ -298,7 +298,7 @@ public class OSBTree<K, V> extends ODurableComponent {
             try {
 
               final Object result = validator.validate(key, oldValue, value);
-              if (result == OIndexEngine.Validator.IGNORE) {
+              if (result == OBaseIndexEngine.Validator.IGNORE) {
                 ignored = true;
                 failure = false;
                 return false;
@@ -409,7 +409,7 @@ public class OSBTree<K, V> extends ODurableComponent {
             if (validator != null) {
 
               final Object result = validator.validate(null, oldValueValue, value);
-              if (result == OIndexEngine.Validator.IGNORE) {
+              if (result == OBaseIndexEngine.Validator.IGNORE) {
                 ignored = true;
                 return false;
               }
