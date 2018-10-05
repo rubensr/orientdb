@@ -42,7 +42,8 @@ import java.util.List;
  * @since 8/7/13
  */
 public class OSBTreeBucketMultiValue<K> extends ODurablePage {
-  private static final int RID_SIZE = OShortSerializer.SHORT_SIZE + OLongSerializer.LONG_SIZE;
+  private static final int RID_SIZE              = OShortSerializer.SHORT_SIZE + OLongSerializer.LONG_SIZE;
+  private static final int LINKED_LIST_ITEM_SIZE = RID_SIZE + OIntegerSerializer.INT_SIZE;
 
   private static final int FREE_POINTER_OFFSET  = NEXT_FREE_POSITION;
   private static final int SIZE_OFFSET          = FREE_POINTER_OFFSET + OIntegerSerializer.INT_SIZE;
@@ -140,6 +141,7 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
 
     position += keySize;
 
+    //only single element in list
     if (nextItem == -1) {
       final int clusterId = getShortValue(position);
       if (clusterId != value.getClusterId()) {
@@ -164,20 +166,38 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
         final int freePointer = getIntValue(FREE_POINTER_OFFSET);
         final int entrySize = OIntegerSerializer.INT_SIZE + RID_SIZE + keySize;
 
+        boolean moved = false;
         if (size > 0 && entryPosition > freePointer) {
           moveData(freePointer, freePointer + entrySize, entryPosition - freePointer);
+          moved = true;
         }
 
         setIntValue(FREE_POINTER_OFFSET, freePointer + entrySize);
 
-        int currentPositionOffset = POSITIONS_ARRAY_OFFSET;
+        if (moved) {
+          int currentPositionOffset = POSITIONS_ARRAY_OFFSET;
 
-        for (int i = 0; i < size; i++) {
-          final int currentEntryPosition = getIntValue(currentPositionOffset);
-          if (currentEntryPosition < entryPosition) {
-            setIntValue(currentPositionOffset, currentEntryPosition + entrySize);
+          for (int i = 0; i < size; i++) {
+            final int currentEntryPosition = getIntValue(currentPositionOffset);
+            final int updatedEntryPosition;
+
+            if (currentEntryPosition < entryPosition) {
+              updatedEntryPosition = currentEntryPosition + entrySize;
+              setIntValue(currentPositionOffset, updatedEntryPosition);
+            } else {
+              updatedEntryPosition = currentEntryPosition;
+            }
+
+            nextItem = getIntValue(updatedEntryPosition);
+            if (nextItem < entryPosition) {
+              //update reference to the first item of linked list
+              setIntValue(updatedEntryPosition, nextItem + entrySize);
+
+              updateAllLinkedListReferences(nextItem, entryPosition, entryPosition);
+            }
+
+            currentPositionOffset += OIntegerSerializer.INT_SIZE;
           }
-          currentPositionOffset += OIntegerSerializer.INT_SIZE;
         }
 
         return true;
@@ -197,7 +217,32 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
         setIntValue(FREE_POINTER_OFFSET, freePointer + OIntegerSerializer.INT_SIZE + RID_SIZE);
 
         if (nextItem > freePointer) {
-          moveData(freePointer, freePointer + OIntegerSerializer.INT_SIZE + RID_SIZE, nextItem - freePointer);
+          moveData(freePointer, freePointer + LINKED_LIST_ITEM_SIZE, nextItem - freePointer);
+
+          final int size = getIntValue(SIZE_OFFSET);
+          int currentPositionOffset = POSITIONS_ARRAY_OFFSET;
+
+          for (int i = 0; i < size; i++) {
+            final int currentEntryPosition = getIntValue(currentPositionOffset);
+            final int updatedEntryPosition;
+
+            if (currentEntryPosition < nextItem) {
+              updatedEntryPosition = currentEntryPosition + LINKED_LIST_ITEM_SIZE;
+              setIntValue(currentPositionOffset, updatedEntryPosition);
+            } else {
+              updatedEntryPosition = currentEntryPosition;
+            }
+
+            final int currentNextItem = getIntValue(updatedEntryPosition);
+            if (currentNextItem < nextItem) {
+              //update reference to the first item of linked list
+              setIntValue(updatedEntryPosition, currentNextItem + LINKED_LIST_ITEM_SIZE);
+
+              updateAllLinkedListReferences(currentNextItem, nextItem, LINKED_LIST_ITEM_SIZE);
+            }
+
+            currentPositionOffset += OIntegerSerializer.INT_SIZE;
+          }
         }
 
         return true;
@@ -213,21 +258,61 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
             setIntValue(prevItem, nextNextItem);
 
             final int freePointer = getIntValue(FREE_POINTER_OFFSET);
-            setIntValue(FREE_POINTER_OFFSET, freePointer + OIntegerSerializer.INT_SIZE + RID_SIZE);
+            setIntValue(FREE_POINTER_OFFSET, freePointer + LINKED_LIST_ITEM_SIZE);
 
             if (nextItem > freePointer) {
-              moveData(freePointer, freePointer + OIntegerSerializer.INT_SIZE + RID_SIZE, nextItem - freePointer);
+              moveData(freePointer, freePointer + LINKED_LIST_ITEM_SIZE, nextItem - freePointer);
+
+              final int size = getIntValue(SIZE_OFFSET);
+              int currentPositionOffset = POSITIONS_ARRAY_OFFSET;
+
+              for (int i = 0; i < size; i++) {
+                final int currentEntryPosition = getIntValue(currentPositionOffset);
+                final int updatedEntryPosition;
+
+                if (currentEntryPosition < nextItem) {
+                  updatedEntryPosition = currentEntryPosition + LINKED_LIST_ITEM_SIZE;
+                  setIntValue(currentPositionOffset, updatedEntryPosition);
+                } else {
+                  updatedEntryPosition = currentEntryPosition;
+                }
+
+                final int currentNextItem = getIntValue(updatedEntryPosition);
+                if (currentNextItem < nextItem) {
+                  //update reference to the first item of linked list
+                  setIntValue(updatedEntryPosition, currentNextItem + LINKED_LIST_ITEM_SIZE);
+
+                  updateAllLinkedListReferences(currentNextItem, nextItem, LINKED_LIST_ITEM_SIZE);
+                }
+
+                currentPositionOffset += OIntegerSerializer.INT_SIZE;
+              }
             }
 
             return true;
           }
 
+          prevItem = nextItem;
           nextItem = nextNextItem;
         }
       }
     }
 
     return false;
+  }
+
+  private void updateAllLinkedListReferences(int firstItem, int boundary, int diffSize) {
+    int currentItem = firstItem + diffSize;
+
+    while (currentItem < boundary) {
+      final int nextItem = getIntValue(currentItem);
+      if (nextItem > 0 && nextItem < boundary) {
+        setIntValue(currentItem, nextItem + diffSize);
+        currentItem = nextItem + diffSize;
+      } else {
+        break;
+      }
+    }
   }
 
   public int size() {

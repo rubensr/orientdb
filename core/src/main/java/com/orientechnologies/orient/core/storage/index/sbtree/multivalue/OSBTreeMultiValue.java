@@ -587,15 +587,17 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
         try {
           final OSBTreeBucketMultiValue<K> bucket = new OSBTreeBucketMultiValue<>(cacheEntry, keySerializer, encryption);
 
-          if (itemIndex == 0) {
-            leftSibling = bucket.getLeftSibling();
-          }
-
-          if (itemIndex == bucket.size() - 1) {
-            rightSibling = bucket.getRightSibling();
-          }
-
           removed = bucket.remove(itemIndex, value);
+
+          if (!removed) {
+            if (itemIndex == 0) {
+              leftSibling = bucket.getLeftSibling();
+            }
+
+            if (itemIndex == bucket.size() - 1) {
+              rightSibling = bucket.getRightSibling();
+            }
+          }
         } finally {
           releasePageFromRead(atomicOperation, cacheEntry);
         }
@@ -611,10 +613,12 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
                 removed = true;
               }
 
-              if (size == 1) {
-                leftSibling = bucket.getLeftSibling();
-              } else {
-                leftSibling = -1;
+              if (!removed) {
+                if (size == 1) {
+                  leftSibling = bucket.getLeftSibling();
+                } else {
+                  leftSibling = -1;
+                }
               }
             } else {
               leftSibling = bucket.getLeftSibling();
@@ -635,10 +639,12 @@ public class OSBTreeMultiValue<K> extends ODurableComponent {
                 removed = true;
               }
 
-              if (size == 1) {
-                rightSibling = bucket.getRightSibling();
-              } else {
-                rightSibling = -1;
+              if (!removed) {
+                if (size == 1) {
+                  rightSibling = bucket.getRightSibling();
+                } else {
+                  rightSibling = -1;
+                }
               }
             } else {
               rightSibling = bucket.getRightSibling();
