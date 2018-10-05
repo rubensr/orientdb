@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Set;
 
 public interface OBaseIndexEngine {
-  int VERSION = 1;
 
   void init(String indexName, String indexType, OIndexDefinition indexDefinition, boolean isAutomatic, ODocument metadata);
 
@@ -60,6 +59,8 @@ public interface OBaseIndexEngine {
   boolean hasRangeQuerySupport();
 
   int getVersion();
+
+  int getEngineVersion();
 
   String getName();
 

@@ -50,4 +50,9 @@ public interface OIndexEngine extends OBaseIndexEngine {
    * @see Validator#validate(Object, Object, Object)
    */
   boolean validatedPut(Object key, OIdentifiable value, Validator<Object, OIdentifiable> validator);
+
+  @Override
+  default int getEngineVersion() {
+    return VERSION;
+  }
 }
