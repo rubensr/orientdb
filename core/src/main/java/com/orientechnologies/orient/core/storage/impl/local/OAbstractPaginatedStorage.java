@@ -57,7 +57,6 @@ import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
 import com.orientechnologies.orient.core.db.ODatabaseListener;
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import com.orientechnologies.orient.core.db.record.OCurrentStorageComponentsFactory;
-import com.orientechnologies.orient.core.db.record.OIdentifiable;
 import com.orientechnologies.orient.core.db.record.ORecordOperation;
 import com.orientechnologies.orient.core.db.record.ridbag.ORidBagDeleter;
 import com.orientechnologies.orient.core.encryption.OEncryption;
@@ -92,6 +91,9 @@ import com.orientechnologies.orient.core.index.OIndexes;
 import com.orientechnologies.orient.core.index.ORuntimeKeyIndexDefinition;
 import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
 import com.orientechnologies.orient.core.index.engine.OIndexEngine;
+import com.orientechnologies.orient.core.index.engine.OMultiValueIndexEngine;
+import com.orientechnologies.orient.core.index.engine.OSingleValueIndexEngine;
+import com.orientechnologies.orient.core.index.engine.OV1IndexEngine;
 import com.orientechnologies.orient.core.metadata.OMetadataDefault;
 import com.orientechnologies.orient.core.metadata.schema.OImmutableClass;
 import com.orientechnologies.orient.core.metadata.schema.OType;
@@ -2511,7 +2513,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   }
 
   private static int generateIndexId(int internalId, OBaseIndexEngine indexEngine) {
-    return indexEngine.getEngineVersion() << (OIntegerSerializer.INT_SIZE * 8 - 5) | internalId;
+    return indexEngine.getEngineAPIVersion() << (OIntegerSerializer.INT_SIZE * 8 - 5) | internalId;
   }
 
   private static int extractInternalId(int externalId) {
@@ -2520,6 +2522,10 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
 
     return externalId & 0x7_FF_FF_FF;
+  }
+
+  public static int extractEngineAPIVersion(int externalId) {
+    return externalId >>> (OIntegerSerializer.INT_SIZE * 8 - 5);
   }
 
   private OBinarySerializer determineKeySerializer(OIndexDefinition indexDefinition) {
@@ -2671,8 +2677,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
       makeStorageDirty();
       final OBaseIndexEngine engine = indexEngines.get(indexId);
-
-      return ((OIndexEngine) engine).remove(key);
+      return engine.remove(key);
     } catch (IOException e) {
       throw OException.wrapException(new OStorageException("Error during removal of entry with key " + key + " from index "), e);
     }
@@ -2756,8 +2761,7 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     checkIndexId(indexId);
 
     final OBaseIndexEngine engine = indexEngines.get(indexId);
-
-    return ((OIndexEngine) engine).get(key);
+    return engine.get(key);
   }
 
   public OBaseIndexEngine getIndexEngine(int indexId) throws OInvalidIndexEngineIdException {
@@ -2780,6 +2784,11 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   public void updateIndexEntry(int indexId, Object key, OIndexKeyUpdater<Object> valueCreator)
       throws OInvalidIndexEngineIdException {
     indexId = extractInternalId(indexId);
+    final int engineAPIVersion = extractEngineAPIVersion(indexId);
+
+    if (engineAPIVersion != 0) {
+      throw new IllegalStateException("Unsupported version of index engine API. Required 0 but found " + engineAPIVersion);
+    }
 
     try {
       if (transaction.get() != null) {
@@ -2912,8 +2921,112 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
   }
 
+  public void putRidIndexEntry(int indexId, Object key, ORID value) throws OInvalidIndexEngineIdException {
+    indexId = extractInternalId(indexId);
+    final int engineAPIVersion = extractEngineAPIVersion(indexId);
+
+    if (engineAPIVersion != 1) {
+      throw new IllegalStateException("Unsupported version of index engine API. Required 1 but found " + engineAPIVersion);
+    }
+
+    try {
+      if (transaction.get() != null) {
+        doPutRidIndexEntry(indexId, key, value);
+        return;
+      }
+
+      checkOpenness();
+
+      stateLock.acquireReadLock();
+      try {
+        checkOpenness();
+
+        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+
+        doPutRidIndexEntry(indexId, key, value);
+      } finally {
+        stateLock.releaseReadLock();
+      }
+    } catch (OInvalidIndexEngineIdException ie) {
+      throw logAndPrepareForRethrow(ie);
+    } catch (RuntimeException ee) {
+      throw logAndPrepareForRethrow(ee);
+    } catch (Error ee) {
+      throw logAndPrepareForRethrow(ee);
+    } catch (Throwable t) {
+      throw logAndPrepareForRethrow(t);
+    }
+  }
+
+  private void doPutRidIndexEntry(int indexId, Object key, ORID value) throws OInvalidIndexEngineIdException {
+    try {
+      checkIndexId(indexId);
+
+      final OBaseIndexEngine engine = indexEngines.get(indexId);
+      makeStorageDirty();
+
+      ((OV1IndexEngine) engine).put(key, value);
+    } catch (IOException e) {
+      throw OException.wrapException(new OStorageException("Cannot put key " + key + " value " + value + " entry to the index"), e);
+    }
+  }
+
+  public boolean removeRidIndexEntry(int indexId, Object key, ORID value) throws OInvalidIndexEngineIdException {
+    indexId = extractInternalId(indexId);
+    final int engineAPIVersion = extractEngineAPIVersion(indexId);
+
+    if (engineAPIVersion != 1) {
+      throw new IllegalStateException("Unsupported version of index engine API. Required 1 but found " + engineAPIVersion);
+    }
+
+    try {
+      if (transaction.get() != null) {
+        return doRemoveRidIndexEntry(indexId, key, value);
+      }
+
+      checkOpenness();
+
+      stateLock.acquireReadLock();
+      try {
+        checkOpenness();
+
+        checkLowDiskSpaceRequestsAndReadOnlyConditions();
+
+        return doRemoveRidIndexEntry(indexId, key, value);
+      } finally {
+        stateLock.releaseReadLock();
+      }
+    } catch (OInvalidIndexEngineIdException ie) {
+      throw logAndPrepareForRethrow(ie);
+    } catch (RuntimeException ee) {
+      throw logAndPrepareForRethrow(ee);
+    } catch (Error ee) {
+      throw logAndPrepareForRethrow(ee);
+    } catch (Throwable t) {
+      throw logAndPrepareForRethrow(t);
+    }
+  }
+
+  private boolean doRemoveRidIndexEntry(int indexId, Object key, ORID value) throws OInvalidIndexEngineIdException {
+    try {
+      checkIndexId(indexId);
+
+      final OBaseIndexEngine engine = indexEngines.get(indexId);
+      makeStorageDirty();
+
+      return ((OMultiValueIndexEngine) engine).remove(key, value);
+    } catch (IOException e) {
+      throw OException.wrapException(new OStorageException("Cannot put key " + key + " value " + value + " entry to the index"), e);
+    }
+  }
+
   public void putIndexValue(int indexId, Object key, Object value) throws OInvalidIndexEngineIdException {
     indexId = extractInternalId(indexId);
+    final int engineAPIVersion = extractEngineAPIVersion(indexId);
+
+    if (engineAPIVersion != 0) {
+      throw new IllegalStateException("Unsupported version of index engine API. Required 0 but found " + engineAPIVersion);
+    }
 
     try {
       if (transaction.get() != null) {
@@ -2971,8 +3084,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
    * @see OBaseIndexEngine.Validator#validate(Object, Object, Object)
    */
   @SuppressWarnings("UnusedReturnValue")
-  public boolean validatedPutIndexValue(int indexId, Object key, OIdentifiable value,
-      OBaseIndexEngine.Validator<Object, OIdentifiable> validator) throws OInvalidIndexEngineIdException {
+  public boolean validatedPutIndexValue(int indexId, Object key, ORID value, OBaseIndexEngine.Validator<Object, ORID> validator)
+      throws OInvalidIndexEngineIdException {
     indexId = extractInternalId(indexId);
 
     try {
@@ -3003,15 +3116,23 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
     }
   }
 
-  private boolean doValidatedPutIndexValue(int indexId, Object key, OIdentifiable value,
-      OBaseIndexEngine.Validator<Object, OIdentifiable> validator) throws OInvalidIndexEngineIdException {
+  private boolean doValidatedPutIndexValue(int indexId, Object key, ORID value, OBaseIndexEngine.Validator<Object, ORID> validator)
+      throws OInvalidIndexEngineIdException {
     try {
       checkIndexId(indexId);
 
       final OBaseIndexEngine engine = indexEngines.get(indexId);
       makeStorageDirty();
 
-      return ((OIndexEngine) engine).validatedPut(key, value, validator);
+      if (engine instanceof OIndexEngine) {
+        return ((OIndexEngine) engine).validatedPut(key, value, validator);
+      }
+
+      if (engine instanceof OSingleValueIndexEngine) {
+        return ((OSingleValueIndexEngine) engine).validatedPut(key, value.getIdentity(), validator);
+      }
+
+      throw new IllegalStateException("Invalid type of index engine " + engine.getClass().getName());
     } catch (IOException e) {
       throw OException.wrapException(new OStorageException("Cannot put key " + key + " value " + value + " entry to the index"), e);
     }

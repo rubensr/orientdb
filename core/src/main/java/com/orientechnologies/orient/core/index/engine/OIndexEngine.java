@@ -20,7 +20,7 @@
 
 package com.orientechnologies.orient.core.index.engine;
 
-import com.orientechnologies.orient.core.db.record.OIdentifiable;
+import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.index.OIndexKeyUpdater;
 
 /**
@@ -29,10 +29,6 @@ import com.orientechnologies.orient.core.index.OIndexKeyUpdater;
  */
 public interface OIndexEngine extends OBaseIndexEngine {
   int VERSION = 0;
-
-  boolean remove(Object key);
-
-  Object get(Object key);
 
   void put(Object key, Object value);
 
@@ -49,10 +45,10 @@ public interface OIndexEngine extends OBaseIndexEngine {
    *
    * @see Validator#validate(Object, Object, Object)
    */
-  boolean validatedPut(Object key, OIdentifiable value, Validator<Object, OIdentifiable> validator);
+  boolean validatedPut(Object key, ORID value, Validator<Object, ORID> validator);
 
   @Override
-  default int getEngineVersion() {
+  default int getEngineAPIVersion() {
     return VERSION;
   }
 }

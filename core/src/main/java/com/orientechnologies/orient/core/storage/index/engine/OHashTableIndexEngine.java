@@ -192,7 +192,7 @@ public final class OHashTableIndexEngine implements OIndexEngine {
 
   @SuppressWarnings("unchecked")
   @Override
-  public boolean validatedPut(Object key, OIdentifiable value, Validator<Object, OIdentifiable> validator) {
+  public boolean validatedPut(Object key, ORID value, Validator<Object, ORID> validator) {
     return hashTable.validatedPut(key, value, (Validator) validator);
   }
 

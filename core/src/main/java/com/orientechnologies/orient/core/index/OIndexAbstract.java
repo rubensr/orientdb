@@ -70,25 +70,28 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
 
-  protected static final String                    CONFIG_MAP_RID   = "mapRid";
-  protected static final String                    CONFIG_CLUSTERS  = "clusters";
+  protected static final String                    CONFIG_MAP_RID  = "mapRid";
+  protected static final String                    CONFIG_CLUSTERS = "clusters";
   protected final        String                    type;
   protected final        ODocument                 metadata;
   protected final        OAbstractPaginatedStorage storage;
   private final          String                    databaseName;
   private final          String                    name;
-  private final          OReadersWriterSpinLock    rwLock           = new OReadersWriterSpinLock();
-  private final          AtomicLong                rebuildVersion   = new AtomicLong();
+  private final          OReadersWriterSpinLock    rwLock          = new OReadersWriterSpinLock();
+  private final          AtomicLong                rebuildVersion  = new AtomicLong();
   private final          int                       version;
   protected volatile     IndexConfiguration        configuration;
   protected              String                    valueContainerAlgorithm;
-  protected              int                       indexId          = -1;
-  protected              Set<String>               clustersToIndex  = new HashSet<String>();
-  private                String                    algorithm;
-  private volatile       OIndexDefinition          indexDefinition;
-  private volatile       boolean                   rebuilding       = false;
-  private                Map<String, String>       engineProperties = new HashMap<String, String>();
-  protected final        int                       binaryFormatVersion;
+
+  protected int indexId    = -1;
+  protected int apiVersion = -1;
+
+  protected        Set<String>         clustersToIndex  = new HashSet<String>();
+  private          String              algorithm;
+  private volatile OIndexDefinition    indexDefinition;
+  private volatile boolean             rebuilding       = false;
+  private          Map<String, String> engineProperties = new HashMap<String, String>();
+  protected final  int                 binaryFormatVersion;
 
   public OIndexAbstract(String name, final String type, final String algorithm, final String valueContainerAlgorithm,
       final ODocument metadata, final int version, final OStorage storage, int binaryFormatVersion) {
@@ -210,17 +213,19 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
 
       // do not remove this, it is needed to remove index garbage if such one exists
       try {
-        removeValuesContainer();
+        if (apiVersion == 0) {
+          removeValuesContainer();
+        }
       } catch (Exception e) {
         OLogManager.instance().error(this, "Error during deletion of index '%s'", e, name);
       }
 
-      final Boolean durableInNonTxMode = isDurableInNonTxMode();
+      indexId = storage.addIndexEngine(name, algorithm, type, indexDefinition, valueSerializer, isAutomatic(), true, version,
+          getEngineProperties(), clustersToIndex, metadata);
+      apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
 
-      indexId = storage
-          .addIndexEngine(name, algorithm, type, indexDefinition, valueSerializer, isAutomatic(), durableInNonTxMode, version,
-              getEngineProperties(), clustersToIndex, metadata);
       assert indexId >= 0;
+      assert apiVersion >= 0;
 
       onIndexEngineChange(indexId);
 
@@ -256,6 +261,7 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
 
   protected void doReloadIndexEngine() {
     indexId = storage.loadIndexEngine(name);
+    apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
 
     if (indexId < 0) {
       throw new IllegalStateException("Index " + name + " can not be loaded");
@@ -269,22 +275,6 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
     else if (OMultiValue.isMultiValue(result))
       return OMultiValue.getSize(result);
     return 1;
-  }
-
-  private Boolean isDurableInNonTxMode() {
-    Boolean durableInNonTxMode;
-
-    Object durable = null;
-
-    if (metadata != null) {
-      durable = metadata.field("durableInNonTxMode");
-    }
-
-    if (durable instanceof Boolean)
-      durableInNonTxMode = (Boolean) durable;
-    else
-      durableInNonTxMode = null;
-    return durableInNonTxMode;
   }
 
   public boolean loadFromConfiguration(final ODocument config) {
@@ -301,15 +291,18 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
 
       try {
         indexId = storage.loadIndexEngine(name);
+        apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
 
         if (indexId == -1) {
           indexId = storage
-              .loadExternalIndexEngine(name, algorithm, type, indexDefinition, determineValueSerializer(), isAutomatic(),
-                  isDurableInNonTxMode(), version, getEngineProperties());
+              .loadExternalIndexEngine(name, algorithm, type, indexDefinition, determineValueSerializer(), isAutomatic(), true,
+                  version, getEngineProperties());
+          apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
         }
 
-        if (indexId == -1)
+        if (indexId == -1) {
           return false;
+        }
 
         onIndexEngineChange(indexId);
 
@@ -443,9 +436,9 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
 
       removeValuesContainer();
 
-      indexId = storage
-          .addIndexEngine(name, algorithm, type, indexDefinition, determineValueSerializer(), isAutomatic(), isDurableInNonTxMode(),
+      indexId = storage.addIndexEngine(name, algorithm, type, indexDefinition, determineValueSerializer(), isAutomatic(), true,
               version, getEngineProperties(), clustersToIndex, metadata);
+      apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
 
       onIndexEngineChange(indexId);
     } catch (Exception e) {
@@ -656,7 +649,6 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
 
   @Override
   public int getVersion() {
-    final IndexConfiguration conf = this.configuration;
     return version;
   }
 
@@ -1036,13 +1028,6 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
   public static final class IndexTxSnapshot {
     public Map<Object, Object> indexSnapshot = new HashMap<Object, Object>();
     public boolean             clear         = false;
-  }
-
-  private static class IndexTxSnapshotThreadLocal extends ThreadLocal<IndexTxSnapshot> {
-    @Override
-    protected IndexTxSnapshot initialValue() {
-      return new IndexTxSnapshot();
-    }
   }
 
   protected static class IndexConfiguration {

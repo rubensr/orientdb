@@ -169,7 +169,7 @@ public class OSBTreeIndexEngine implements OIndexEngine {
 
   @SuppressWarnings("unchecked")
   @Override
-  public boolean validatedPut(Object key, OIdentifiable value, Validator<Object, OIdentifiable> validator) {
+  public boolean validatedPut(Object key, ORID value, Validator<Object, ORID> validator) {
     return sbTree.validatedPut(key, value, (Validator) validator);
   }
 

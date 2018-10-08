@@ -192,7 +192,7 @@ public class OPrefixBTreeIndexEngine implements OIndexEngine {
 
   @SuppressWarnings("unchecked")
   @Override
-  public boolean validatedPut(Object key, OIdentifiable value, Validator<Object, OIdentifiable> validator) {
+  public boolean validatedPut(Object key, ORID value, Validator<Object, ORID> validator) {
     if (key == null) {
       return prefixTree.validatedPut(null, value, (Validator) validator);
     }

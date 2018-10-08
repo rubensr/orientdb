@@ -36,6 +36,10 @@ public interface OBaseIndexEngine {
 
   void close();
 
+  Object get(Object key);
+
+  boolean remove(Object key);
+
   Object getFirstKey();
 
   Object getLastKey();
@@ -60,7 +64,7 @@ public interface OBaseIndexEngine {
 
   int getVersion();
 
-  int getEngineVersion();
+  int getEngineAPIVersion();
 
   String getName();
 
