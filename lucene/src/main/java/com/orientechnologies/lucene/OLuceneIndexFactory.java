@@ -103,7 +103,7 @@ public class OLuceneIndexFactory implements OIndexFactory, ODatabaseLifecycleLis
 
   @Override
   public OBaseIndexEngine createIndexEngine(String algorithm, String indexName, Boolean durableInNonTxMode, OStorage storage,
-      int version, Map<String, String> engineProperties) {
+      int version, int apiVersion, boolean multivalue, Map<String, String> engineProperties) {
 
     return new OLuceneFullTextIndexEngine(storage, indexName);
 

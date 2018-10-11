@@ -609,7 +609,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
       final OStorageConfigurationImpl.IndexEngineData engineData = getConfiguration().getIndexEngine(indexName);
       final OBaseIndexEngine engine = OIndexes
           .createIndexEngine(engineData.getName(), engineData.getAlgorithm(), engineData.getIndexType(),
-              engineData.getDurableInNonTxMode(), this, engineData.getVersion(), engineData.getEngineProperties(), null);
+              engineData.getDurableInNonTxMode(), this, engineData.getVersion(), engineData.getApiVersion(),
+              engineData.isMultivalue(), engineData.getEngineProperties(), null);
 
       try {
         OEncryption encryption;
@@ -2373,8 +2374,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   }
 
   public int loadExternalIndexEngine(String engineName, String algorithm, String indexType, OIndexDefinition indexDefinition,
-      OBinarySerializer valueSerializer, boolean isAutomatic, Boolean durableInNonTxMode, int version,
-      Map<String, String> engineProperties) {
+      OBinarySerializer valueSerializer, boolean isAutomatic, Boolean durableInNonTxMode, int version, int apiVersion,
+      boolean multivalue, Map<String, String> engineProperties) {
     try {
       checkOpenness();
 
@@ -2401,11 +2402,12 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         final boolean nullValuesSupport = indexDefinition != null && !indexDefinition.isNullValuesIgnored();
 
         final OStorageConfigurationImpl.IndexEngineData engineData = new OStorageConfigurationImpl.IndexEngineData(engineName,
-            algorithm, indexType, durableInNonTxMode, version, valueSerializer.getId(), keySerializer.getId(), isAutomatic,
-            keyTypes, nullValuesSupport, keySize, null, null, engineProperties);
+            algorithm, indexType, durableInNonTxMode, version, apiVersion, multivalue, valueSerializer.getId(),
+            keySerializer.getId(), isAutomatic, keyTypes, nullValuesSupport, keySize, null, null, engineProperties);
 
         final OBaseIndexEngine engine = OIndexes
-            .createIndexEngine(engineName, algorithm, indexType, durableInNonTxMode, this, version, engineProperties, null);
+            .createIndexEngine(engineName, algorithm, indexType, durableInNonTxMode, this, version, apiVersion, multivalue,
+                engineProperties, null);
         engine.load(engineName, valueSerializer, isAutomatic, keySerializer, keyTypes, nullValuesSupport, keySize,
             engineData.getEngineProperties(), null);
 
@@ -2430,8 +2432,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
   public int addIndexEngine(String engineName, final String algorithm, final String indexType,
       final OIndexDefinition indexDefinition, final OBinarySerializer valueSerializer, final boolean isAutomatic,
-      final Boolean durableInNonTxMode, final int version, final Map<String, String> engineProperties,
-      final Set<String> clustersToIndex, final ODocument metadata) {
+      final Boolean durableInNonTxMode, final int version, int apiVersion, boolean multivalue,
+      final Map<String, String> engineProperties, final Set<String> clustersToIndex, final ODocument metadata) {
     try {
       checkOpenness();
 
@@ -2467,7 +2469,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         }
 
         final OBaseIndexEngine engine = OIndexes
-            .createIndexEngine(engineName, algorithm, indexType, durableInNonTxMode, this, version, engineProperties, metadata);
+            .createIndexEngine(engineName, algorithm, indexType, durableInNonTxMode, this, version, apiVersion, multivalue,
+                engineProperties, metadata);
 
         final OContextConfiguration ctxCfg = getConfiguration().getContextConfiguration();
         final String cfgEncryption = ctxCfg.getValueAsString(OGlobalConfiguration.STORAGE_ENCRYPTION_METHOD);
@@ -2492,8 +2495,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
         indexEngines.add(engine);
 
         final OStorageConfigurationImpl.IndexEngineData engineData = new OStorageConfigurationImpl.IndexEngineData(engineName,
-            algorithm, indexType, durableInNonTxMode, version, serializerId, keySerializer.getId(), isAutomatic, keyTypes,
-            nullValuesSupport, keySize, cfgEncryption, cfgEncryptionKey, engineProperties);
+            algorithm, indexType, durableInNonTxMode, version, apiVersion, multivalue, serializerId, keySerializer.getId(),
+            isAutomatic, keyTypes, nullValuesSupport, keySize, cfgEncryption, cfgEncryptionKey, engineProperties);
 
         ((OStorageConfigurationImpl) configuration).addIndexEngine(engineName, engineData);
 
@@ -2783,8 +2786,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
 
   public void updateIndexEntry(int indexId, Object key, OIndexKeyUpdater<Object> valueCreator)
       throws OInvalidIndexEngineIdException {
-    indexId = extractInternalId(indexId);
     final int engineAPIVersion = extractEngineAPIVersion(indexId);
+    indexId = extractInternalId(indexId);
 
     if (engineAPIVersion != 0) {
       throw new IllegalStateException("Unsupported version of index engine API. Required 0 but found " + engineAPIVersion);
@@ -2922,8 +2925,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   }
 
   public void putRidIndexEntry(int indexId, Object key, ORID value) throws OInvalidIndexEngineIdException {
-    indexId = extractInternalId(indexId);
     final int engineAPIVersion = extractEngineAPIVersion(indexId);
+    indexId = extractInternalId(indexId);
 
     if (engineAPIVersion != 1) {
       throw new IllegalStateException("Unsupported version of index engine API. Required 1 but found " + engineAPIVersion);
@@ -2972,8 +2975,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   }
 
   public boolean removeRidIndexEntry(int indexId, Object key, ORID value) throws OInvalidIndexEngineIdException {
-    indexId = extractInternalId(indexId);
     final int engineAPIVersion = extractEngineAPIVersion(indexId);
+    indexId = extractInternalId(indexId);
 
     if (engineAPIVersion != 1) {
       throw new IllegalStateException("Unsupported version of index engine API. Required 1 but found " + engineAPIVersion);
@@ -3021,8 +3024,8 @@ public abstract class OAbstractPaginatedStorage extends OStorageAbstract
   }
 
   public void putIndexValue(int indexId, Object key, Object value) throws OInvalidIndexEngineIdException {
-    indexId = extractInternalId(indexId);
     final int engineAPIVersion = extractEngineAPIVersion(indexId);
+    indexId = extractInternalId(indexId);
 
     if (engineAPIVersion != 0) {
       throw new IllegalStateException("Unsupported version of index engine API. Required 0 but found " + engineAPIVersion);

@@ -388,7 +388,7 @@ public abstract class OIndexMultiValues extends OIndexAbstract<Collection<ORID>>
             }
           }
 
-          if (result == null) {
+          if (result == null || result.isEmpty()) {
             currentIterator = null;
             return null;
           }

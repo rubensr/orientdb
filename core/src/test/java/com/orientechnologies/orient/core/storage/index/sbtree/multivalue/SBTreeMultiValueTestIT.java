@@ -149,6 +149,102 @@ public class SBTreeMultiValueTestIT {
   }
 
   @Test
+  public void testKeyPutRemoveWholeKey() {
+    final int itemsCount = 256_000;
+    final String key = "test_key";
+
+    multiValueTree.put("test_ke", new ORecordId(12, 42));
+    multiValueTree.put("test_ke", new ORecordId(12, 43));
+
+    multiValueTree.put("test_key_1", new ORecordId(24, 48));
+    multiValueTree.put("test_key_1", new ORecordId(24, 49));
+
+    for (int i = 0; i < itemsCount; i++) {
+      multiValueTree.put(key, new ORecordId(i % 32000, i));
+    }
+
+    multiValueTree.remove(key);
+
+    List<ORID> result = multiValueTree.get("test_ke");
+    Assert.assertEquals(2, result.size());
+
+    Assert.assertTrue(result.contains(new ORecordId(12, 42)));
+    Assert.assertTrue(result.contains(new ORecordId(12, 43)));
+
+    result = multiValueTree.get("test_key_1");
+    Assert.assertEquals(2, result.size());
+
+    Assert.assertTrue(result.contains(new ORecordId(24, 48)));
+    Assert.assertTrue(result.contains(new ORecordId(24, 49)));
+
+    Assert.assertTrue(multiValueTree.get(key).isEmpty());
+  }
+
+  @Test
+  public void testKeyPutRemoveWholeKeyTwo() {
+    final int itemsCount = 256_000;
+    final String key = "test_key";
+
+    for (int i = 0; i < itemsCount; i++) {
+      multiValueTree.put(key, new ORecordId(i % 32000, i));
+    }
+
+    multiValueTree.put("test_ke", new ORecordId(12, 42));
+    multiValueTree.put("test_ke", new ORecordId(12, 43));
+
+    multiValueTree.put("test_key_1", new ORecordId(24, 48));
+    multiValueTree.put("test_key_1", new ORecordId(24, 49));
+
+    multiValueTree.remove(key);
+
+    List<ORID> result = multiValueTree.get("test_ke");
+    Assert.assertEquals(2, result.size());
+
+    Assert.assertTrue(result.contains(new ORecordId(12, 42)));
+    Assert.assertTrue(result.contains(new ORecordId(12, 43)));
+
+    result = multiValueTree.get("test_key_1");
+    Assert.assertEquals(2, result.size());
+
+    Assert.assertTrue(result.contains(new ORecordId(24, 48)));
+    Assert.assertTrue(result.contains(new ORecordId(24, 49)));
+
+    Assert.assertTrue(multiValueTree.get(key).isEmpty());
+  }
+
+  @Test
+  public void testKeyPutRemoveWholeKeyThree() {
+    final int itemsCount = 256_000;
+    final String key = "test_key";
+
+    multiValueTree.put("test_ke", new ORecordId(12, 42));
+    multiValueTree.put("test_key_1", new ORecordId(24, 48));
+
+    for (int i = 0; i < itemsCount; i++) {
+      multiValueTree.put(key, new ORecordId(i % 32000, i));
+    }
+
+    multiValueTree.put("test_ke", new ORecordId(12, 43));
+    multiValueTree.put("test_key_1", new ORecordId(24, 49));
+
+    multiValueTree.remove(key);
+
+    List<ORID> result = multiValueTree.get("test_ke");
+    Assert.assertEquals(2, result.size());
+
+    Assert.assertTrue(result.contains(new ORecordId(12, 42)));
+    Assert.assertTrue(result.contains(new ORecordId(12, 43)));
+
+    result = multiValueTree.get("test_key_1");
+    Assert.assertEquals(2, result.size());
+
+    Assert.assertTrue(result.contains(new ORecordId(24, 48)));
+    Assert.assertTrue(result.contains(new ORecordId(24, 49)));
+
+    Assert.assertTrue(multiValueTree.get(key).isEmpty());
+  }
+
+  @Test
   public void testKeyPutTwoSameKeys() {
     final int itemsCount = 1_000_000;
     final String keyOne = "test_key_one";
@@ -172,6 +268,61 @@ public class SBTreeMultiValueTestIT {
 
     Assert.assertEquals(itemsCount, result.size());
     resultSet = new HashSet<>(result);
+
+    for (int i = 0; i < itemsCount; i++) {
+      Assert.assertTrue(resultSet.contains(new ORecordId(i % 32000, i)));
+    }
+  }
+
+  @Test
+  public void testKeyPutTwoSameKeysRemoveKey() {
+    final int itemsCount = 500_000;
+    final String keyOne = "test_key_one";
+    final String keyTwo = "test_key_two";
+
+    for (int i = 0; i < itemsCount; i++) {
+      multiValueTree.put(keyOne, new ORecordId(i % 32000, i));
+      multiValueTree.put(keyTwo, new ORecordId(i % 32000, i));
+    }
+
+    multiValueTree.remove(keyOne);
+
+    List<ORID> result = multiValueTree.get(keyOne);
+    Assert.assertTrue(result.isEmpty());
+
+    result = multiValueTree.get(keyTwo);
+
+    Assert.assertEquals(itemsCount, result.size());
+    Set<ORID> resultSet = new HashSet<>(result);
+
+    for (int i = 0; i < itemsCount; i++) {
+      Assert.assertTrue(resultSet.contains(new ORecordId(i % 32000, i)));
+    }
+  }
+
+  @Test
+  public void testKeyPutTwoSameKeysRemoveKeyTwo() {
+    final int itemsCount = 500_000;
+    final String keyOne = "test_key_one";
+    final String keyTwo = "test_key_two";
+
+    for (int i = 0; i < itemsCount; i++) {
+      multiValueTree.put(keyOne, new ORecordId(i % 32000, i));
+      multiValueTree.put(keyTwo, new ORecordId(i % 32000, i));
+    }
+
+    multiValueTree.get(keyOne);
+    multiValueTree.get(keyTwo);
+
+    multiValueTree.remove(keyTwo);
+
+    List<ORID> result = multiValueTree.get(keyTwo);
+    Assert.assertTrue(result.isEmpty());
+
+    result = multiValueTree.get(keyOne);
+
+    Assert.assertEquals(itemsCount, result.size());
+    Set<ORID> resultSet = new HashSet<>(result);
 
     for (int i = 0; i < itemsCount; i++) {
       Assert.assertTrue(resultSet.contains(new ORecordId(i % 32000, i)));
@@ -245,6 +396,76 @@ public class SBTreeMultiValueTestIT {
 
       for (int i = 0; i < itemsCount; i++) {
         Assert.assertTrue(resultSet.contains(new ORecordId(i % 32000, i)));
+      }
+    }
+  }
+
+  @Test
+  public void testKeyPutTenSameKeysRemovedSecond() {
+    final int itemsCount = 500_000;
+
+    final String[] keys = new String[10];
+    for (int i = 0; i < keys.length; i++) {
+      keys[i] = "test_key_" + i;
+    }
+
+    for (int i = 0; i < itemsCount; i++) {
+      for (String key : keys) {
+        multiValueTree.put(key, new ORecordId(i % 32000, i));
+      }
+    }
+
+    for (int i = 0; i < keys.length / 2; i++) {
+      multiValueTree.remove(keys[i * 2]);
+    }
+
+    for (int i = 0; i < keys.length; i++) {
+      if (i % 2 == 0) {
+        Assert.assertTrue(multiValueTree.get(keys[i]).isEmpty());
+      } else {
+        List<ORID> result = multiValueTree.get(keys[i]);
+
+        Assert.assertEquals(itemsCount, result.size());
+        Set<ORID> resultSet = new HashSet<>(result);
+
+        for (int n = 0; n < itemsCount; n++) {
+          Assert.assertTrue(resultSet.contains(new ORecordId(n % 32000, n)));
+        }
+      }
+    }
+  }
+
+  @Test
+  public void testKeyPutTenSameKeysRemovedSecondTwo() {
+    final int itemsCount = 500_000;
+
+    final String[] keys = new String[10];
+    for (int i = 0; i < keys.length; i++) {
+      keys[i] = "test_key_" + i;
+    }
+
+    for (int i = 0; i < itemsCount; i++) {
+      for (String key : keys) {
+        multiValueTree.put(key, new ORecordId(i % 32000, i));
+      }
+    }
+
+    for (int i = 0; i < keys.length / 2; i++) {
+      multiValueTree.remove(keys[i * 2 + 1]);
+    }
+
+    for (int i = 0; i < keys.length; i++) {
+      if (i % 2 == 1) {
+        Assert.assertTrue(multiValueTree.get(keys[i]).isEmpty());
+      } else {
+        List<ORID> result = multiValueTree.get(keys[i]);
+
+        Assert.assertEquals(itemsCount, result.size());
+        Set<ORID> resultSet = new HashSet<>(result);
+
+        for (int n = 0; n < itemsCount; n++) {
+          Assert.assertTrue(resultSet.contains(new ORecordId(n % 32000, n)));
+        }
       }
     }
   }
@@ -376,6 +597,45 @@ public class SBTreeMultiValueTestIT {
       }
     }
   }
+
+  @Test
+  public void testKeyPutThousandSameKeysRemovedSecond() {
+    final int itemsCount = 4;
+
+    final String[] keys = new String[1000];
+    for (int i = 0; i < keys.length; i++) {
+      keys[i] = "test_key_" + i;
+    }
+
+    for (int i = 0; i < itemsCount; i++) {
+      for (String key : keys) {
+        multiValueTree.put(key, new ORecordId(i % 32000, i));
+      }
+    }
+
+    for (int i = 0; i < keys.length / 2; i++) {
+      multiValueTree.get(keys[0]);
+      multiValueTree.get(keys[2]);
+
+      multiValueTree.remove(keys[i * 2]);
+    }
+
+    for (int i = 0; i < keys.length; i++) {
+      if (i % 2 == 0) {
+        Assert.assertTrue(multiValueTree.get(keys[i]).isEmpty());
+      } else {
+        List<ORID> result = multiValueTree.get(keys[i]);
+
+        Assert.assertEquals(itemsCount, result.size());
+        Set<ORID> resultSet = new HashSet<>(result);
+
+        for (int n = 0; n < itemsCount; n++) {
+          Assert.assertTrue(resultSet.contains(new ORecordId(n % 32000, n)));
+        }
+      }
+    }
+  }
+
 
   @Test
   public void testKeyPut() {

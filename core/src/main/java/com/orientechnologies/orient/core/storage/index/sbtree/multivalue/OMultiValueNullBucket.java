@@ -67,9 +67,9 @@ public class OMultiValueNullBucket extends ODurablePage {
     setIntValue(NEXT_OFFSET, pageIndex);
   }
 
-  public boolean addValue(ORID rid) {
+  boolean addValue(ORID rid) {
     final int size = getIntValue(RIDS_SIZE_OFFSET);
-    final int position = (size + 1) * RID_SIZE + RIDS_OFFSET;
+    final int position = size * RID_SIZE + RIDS_OFFSET;
 
     if (position + RID_SIZE > MAX_PAGE_SIZE_BYTES) {
       return false;

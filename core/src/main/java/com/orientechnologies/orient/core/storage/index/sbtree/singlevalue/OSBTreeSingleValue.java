@@ -95,7 +95,7 @@ public class OSBTreeSingleValue<K> extends ODurableComponent {
   private              boolean               nullPointerSupport;
   private              OEncryption           encryption;
 
-  OSBTreeSingleValue(String name, String dataFileExtension, String nullFileExtension, OAbstractPaginatedStorage storage) {
+  public OSBTreeSingleValue(String name, String dataFileExtension, String nullFileExtension, OAbstractPaginatedStorage storage) {
     super(storage, name, dataFileExtension, name + dataFileExtension);
     acquireExclusiveLock();
     try {

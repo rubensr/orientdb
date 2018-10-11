@@ -220,8 +220,8 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
         OLogManager.instance().error(this, "Error during deletion of index '%s'", e, name);
       }
 
-      indexId = storage.addIndexEngine(name, algorithm, type, indexDefinition, valueSerializer, isAutomatic(), true, version,
-          getEngineProperties(), clustersToIndex, metadata);
+      indexId = storage.addIndexEngine(name, algorithm, type, indexDefinition, valueSerializer, isAutomatic(), true, version, 1,
+          this instanceof OIndexMultiValues, getEngineProperties(), clustersToIndex, metadata);
       apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
 
       assert indexId >= 0;
@@ -296,7 +296,7 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
         if (indexId == -1) {
           indexId = storage
               .loadExternalIndexEngine(name, algorithm, type, indexDefinition, determineValueSerializer(), isAutomatic(), true,
-                  version, getEngineProperties());
+                  version, 1, this instanceof OIndexMultiValues, getEngineProperties());
           apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
         }
 
@@ -428,16 +428,18 @@ public abstract class OIndexAbstract<T> implements OIndexInternal<T> {
       rebuildVersion.incrementAndGet();
 
       try {
-        if (indexId >= 0)
+        if (indexId >= 0) {
           storage.deleteIndexEngine(indexId);
+        }
       } catch (Exception e) {
         OLogManager.instance().error(this, "Error during index '%s' delete", e, name);
       }
 
       removeValuesContainer();
 
-      indexId = storage.addIndexEngine(name, algorithm, type, indexDefinition, determineValueSerializer(), isAutomatic(), true,
-              version, getEngineProperties(), clustersToIndex, metadata);
+      indexId = storage
+          .addIndexEngine(name, algorithm, type, indexDefinition, determineValueSerializer(), isAutomatic(), true, version, 1,
+              this instanceof OIndexMultiValues, getEngineProperties(), clustersToIndex, metadata);
       apiVersion = OAbstractPaginatedStorage.extractEngineAPIVersion(indexId);
 
       onIndexEngineChange(indexId);

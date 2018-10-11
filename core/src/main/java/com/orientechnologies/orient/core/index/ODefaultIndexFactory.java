@@ -17,7 +17,8 @@ package com.orientechnologies.orient.core.index;
 
 import com.orientechnologies.orient.core.exception.OConfigurationException;
 import com.orientechnologies.orient.core.index.engine.OBaseIndexEngine;
-import com.orientechnologies.orient.core.index.engine.OIndexEngine;
+import com.orientechnologies.orient.core.index.engine.v1.OSBTreeMultiValueIndexEngine;
+import com.orientechnologies.orient.core.index.engine.v1.OSBTreeSingleValueIndexEngine;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.storage.OStorage;
@@ -144,26 +145,32 @@ public class ODefaultIndexFactory implements OIndexFactory {
 
   @Override
   public OBaseIndexEngine createIndexEngine(String algorithm, String name, Boolean durableInNonTxMode, OStorage storage,
-      int version,
-      Map<String, String> engineProperties) {
+      int version, int apiVersion, boolean multivalue, Map<String, String> engineProperties) {
 
-    final OIndexEngine indexEngine;
+    assert apiVersion == 1;
+    final OBaseIndexEngine indexEngine;
 
     final String storageType = storage.getType();
+
     switch (storageType) {
+    case "distributed":
+      storage = storage.getUnderlying();
     case "memory":
     case "plocal":
-      if (algorithm.equals(PREFIX_BTREE_ALGORITHM)) {
-        indexEngine = new OPrefixBTreeIndexEngine(name, (OAbstractPaginatedStorage) storage, version);
+      if (apiVersion == 0) {
+        if (algorithm.equals(PREFIX_BTREE_ALGORITHM)) {
+          indexEngine = new OPrefixBTreeIndexEngine(name, (OAbstractPaginatedStorage) storage, version);
+        } else {
+          indexEngine = new OSBTreeIndexEngine(name, (OAbstractPaginatedStorage) storage, version);
+        }
+      } else if (apiVersion == 1) {
+        if (multivalue) {
+          indexEngine = new OSBTreeMultiValueIndexEngine(name, (OAbstractPaginatedStorage) storage);
+        } else {
+          indexEngine = new OSBTreeSingleValueIndexEngine(name, (OAbstractPaginatedStorage) storage);
+        }
       } else {
-        indexEngine = new OSBTreeIndexEngine(name, (OAbstractPaginatedStorage) storage, version);
-      }
-      break;
-    case "distributed":  // DISTRIBUTED CASE: HANDLE IT AS FOR LOCAL
-      if (algorithm.equals(PREFIX_BTREE_ALGORITHM)) {
-        indexEngine = new OPrefixBTreeIndexEngine(name, (OAbstractPaginatedStorage) storage.getUnderlying(), version);
-      } else {
-        indexEngine = new OSBTreeIndexEngine(name, (OAbstractPaginatedStorage) storage.getUnderlying(), version);
+        throw new IllegalStateException("Invalid API version, " + apiVersion);
       }
       break;
     case "remote":

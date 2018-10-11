@@ -130,7 +130,7 @@ public class OAutoShardingIndexFactory implements OIndexFactory {
 
   @Override
   public OBaseIndexEngine createIndexEngine(final String algorithm, final String name, final Boolean durableInNonTxMode,
-      final OStorage storage, final int version, final Map<String, String> engineProperties) {
+      final OStorage storage, final int version, int apiVersion, boolean multivalue, final Map<String, String> engineProperties) {
 
     final OIndexEngine indexEngine;
 

@@ -36,6 +36,10 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * @author Andrey Lomakin (a.lomakin-at-orientdb.com)
@@ -122,6 +126,212 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
     return -(low + 1); // key not found.
   }
 
+  int remove(final int entryIndex) {
+    assert isLeaf;
+
+    final int entryPosition = getIntValue(POSITIONS_ARRAY_OFFSET + entryIndex * OIntegerSerializer.INT_SIZE);
+
+    int position = entryPosition;
+    int nextItem = getIntValue(position);
+    position += OIntegerSerializer.INT_SIZE;
+
+    final int keySize;
+    if (encryption == null) {
+      keySize = getObjectSizeInDirectMemory(keySerializer, position);
+    } else {
+      final int encryptedSize = getIntValue(position);
+      keySize = encryptedSize + OIntegerSerializer.INT_SIZE;
+    }
+
+    if (nextItem == -1) {
+      removeMainEntry(entryIndex, entryPosition, keySize);
+
+      return 1;
+    }
+
+    List<Integer> itemsToRemove = new ArrayList<>();
+    final int entrySize = keySize + OIntegerSerializer.INT_SIZE + RID_SIZE;
+    int totalSpace = entrySize;
+
+    while (nextItem > 0) {
+      itemsToRemove.add(nextItem);
+      nextItem = getIntValue(nextItem);
+    }
+
+    totalSpace += itemsToRemove.size() * LINKED_LIST_ITEM_SIZE;
+
+    int size = getIntValue(SIZE_OFFSET);
+
+    final TreeMap<Integer, Integer> entries = new TreeMap<>();
+    final ConcurrentSkipListMap<Integer, Integer> nexts = new ConcurrentSkipListMap<>();
+
+    int currentPositionOffset = POSITIONS_ARRAY_OFFSET;
+
+    for (int i = 0; i < size; i++) {
+      if (i != entryIndex) {
+        final int currentEntryPosition = getIntValue(currentPositionOffset);
+        final int currentNextPosition = getIntValue(currentEntryPosition);
+
+        entries.put(currentEntryPosition, currentPositionOffset);
+        nexts.put(currentNextPosition, currentEntryPosition);
+      }
+
+      currentPositionOffset += OIntegerSerializer.INT_SIZE;
+    }
+
+    int freeSpacePointer = getIntValue(FREE_POINTER_OFFSET);
+
+    int counter = 0;
+    for (int itemToRemove : itemsToRemove) {
+      if (itemToRemove > freeSpacePointer) {
+        moveData(freeSpacePointer, freeSpacePointer + LINKED_LIST_ITEM_SIZE, itemToRemove - freeSpacePointer);
+
+        final SortedMap<Integer, Integer> linkRefToCorrect = nexts.headMap(itemToRemove);
+        final int diff = totalSpace - counter * LINKED_LIST_ITEM_SIZE;
+
+        for (Map.Entry<Integer, Integer> entry : linkRefToCorrect.entrySet()) {
+          final int first = entry.getKey();
+          final int currentEntryPosition = entry.getValue();
+
+          if (first < itemToRemove) {
+            if (currentEntryPosition > 0) {
+              setIntValue(currentEntryPosition, first + diff);
+            } else {
+              final int compositeEntryPosition = -currentEntryPosition;
+              final int prevCounter = compositeEntryPosition >>> 16;
+              final int prevEntryPosition = compositeEntryPosition & 0xFFFF;
+
+              final int updatedEntryPosition = (counter - prevCounter) * LINKED_LIST_ITEM_SIZE + prevEntryPosition;
+
+              setIntValue(updatedEntryPosition, first + diff);
+            }
+          }
+
+          final int[] lastEntry = updateAllLinkedListReferences(first, itemToRemove, LINKED_LIST_ITEM_SIZE, diff);
+
+          if (lastEntry[1] > 0) {
+            nexts.put(lastEntry[1], -((counter << 16) | lastEntry[0]));
+          }
+        }
+
+        linkRefToCorrect.clear();
+
+        final SortedMap<Integer, Integer> entriesRefToCorrect = entries.headMap(itemToRemove);
+        for (Map.Entry<Integer, Integer> entry : entriesRefToCorrect.entrySet()) {
+          final int currentEntryOffset = entry.getValue();
+          final int currentEntryPosition = entry.getKey();
+
+          setIntValue(currentEntryOffset, currentEntryPosition + diff);
+        }
+
+        entriesRefToCorrect.clear();
+      }
+
+      counter++;
+      freeSpacePointer += LINKED_LIST_ITEM_SIZE;
+    }
+
+    if (entryPosition > freeSpacePointer) {
+      moveData(freeSpacePointer, freeSpacePointer + entrySize, entryPosition - freeSpacePointer);
+
+      final SortedMap<Integer, Integer> linkRefToCorrect = nexts.headMap(entryPosition);
+      final int diff = entrySize;
+
+      for (Map.Entry<Integer, Integer> entry : linkRefToCorrect.entrySet()) {
+        final int first = entry.getKey();
+        final int currentEntryPosition = entry.getValue();
+
+        if (currentEntryPosition > 0) {
+          setIntValue(currentEntryPosition, first + diff);
+        } else {
+          final int compositeEntryPosition = -currentEntryPosition;
+          final int prevCounter = compositeEntryPosition >>> 16;
+          final int prevEntryPosition = compositeEntryPosition & 0xFFFF;
+
+          final int updatedEntryPosition =
+              entrySize + (itemsToRemove.size() - prevCounter - 1) * LINKED_LIST_ITEM_SIZE + prevEntryPosition;
+
+          setIntValue(updatedEntryPosition, first + diff);
+        }
+
+        updateAllLinkedListReferences(first, entryPosition, diff);
+      }
+
+      final SortedMap<Integer, Integer> entriesRefToCorrect = entries.headMap(entryPosition);
+      for (Map.Entry<Integer, Integer> entry : entriesRefToCorrect.entrySet()) {
+        final int currentEntryOffset = entry.getValue();
+        final int currentEntryPosition = entry.getKey();
+
+        setIntValue(currentEntryOffset, currentEntryPosition + diff);
+      }
+    }
+
+    freeSpacePointer += entrySize;
+
+    setIntValue(FREE_POINTER_OFFSET, freeSpacePointer);
+
+    if (entryIndex < size) {
+      moveData(POSITIONS_ARRAY_OFFSET + (entryIndex + 1) * OIntegerSerializer.INT_SIZE,
+          POSITIONS_ARRAY_OFFSET + entryIndex * OIntegerSerializer.INT_SIZE, (size - entryIndex - 1) * OIntegerSerializer.INT_SIZE);
+    }
+
+    size--;
+    setIntValue(SIZE_OFFSET, size);
+
+    return itemsToRemove.size() + 1;
+  }
+
+  private void removeMainEntry(int entryIndex, int entryPosition, int keySize) {
+    int nextItem;
+    int size = getIntValue(SIZE_OFFSET);
+
+    if (entryIndex < size - 1) {
+      moveData(POSITIONS_ARRAY_OFFSET + (entryIndex + 1) * OIntegerSerializer.INT_SIZE,
+          POSITIONS_ARRAY_OFFSET + entryIndex * OIntegerSerializer.INT_SIZE, (size - entryIndex - 1) * OIntegerSerializer.INT_SIZE);
+    }
+
+    size--;
+    setIntValue(SIZE_OFFSET, size);
+
+    final int freePointer = getIntValue(FREE_POINTER_OFFSET);
+    final int entrySize = OIntegerSerializer.INT_SIZE + RID_SIZE + keySize;
+
+    boolean moved = false;
+    if (size > 0 && entryPosition > freePointer) {
+      moveData(freePointer, freePointer + entrySize, entryPosition - freePointer);
+      moved = true;
+    }
+
+    setIntValue(FREE_POINTER_OFFSET, freePointer + entrySize);
+
+    if (moved) {
+      int currentPositionOffset = POSITIONS_ARRAY_OFFSET;
+
+      for (int i = 0; i < size; i++) {
+        final int currentEntryPosition = getIntValue(currentPositionOffset);
+        final int updatedEntryPosition;
+
+        if (currentEntryPosition < entryPosition) {
+          updatedEntryPosition = currentEntryPosition + entrySize;
+          setIntValue(currentPositionOffset, updatedEntryPosition);
+        } else {
+          updatedEntryPosition = currentEntryPosition;
+        }
+
+        nextItem = getIntValue(updatedEntryPosition);
+        if (nextItem > 0 && nextItem < entryPosition) {
+          //update reference to the first item of linked list
+          setIntValue(updatedEntryPosition, nextItem + entrySize);
+
+          updateAllLinkedListReferences(nextItem, entryPosition, entryPosition);
+        }
+
+        currentPositionOffset += OIntegerSerializer.INT_SIZE;
+      }
+
+    }
+  }
+
   boolean remove(final int entryIndex, final ORID value) {
     assert isLeaf;
 
@@ -152,54 +362,7 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
 
       final long clusterPosition = getLongValue(position);
       if (clusterPosition == value.getClusterPosition()) {
-        int size = getIntValue(SIZE_OFFSET);
-
-        if (entryIndex < size - 1) {
-          moveData(POSITIONS_ARRAY_OFFSET + (entryIndex + 1) * OIntegerSerializer.INT_SIZE,
-              POSITIONS_ARRAY_OFFSET + entryIndex * OIntegerSerializer.INT_SIZE,
-              (size - entryIndex - 1) * OIntegerSerializer.INT_SIZE);
-        }
-
-        size--;
-        setIntValue(SIZE_OFFSET, size);
-
-        final int freePointer = getIntValue(FREE_POINTER_OFFSET);
-        final int entrySize = OIntegerSerializer.INT_SIZE + RID_SIZE + keySize;
-
-        boolean moved = false;
-        if (size > 0 && entryPosition > freePointer) {
-          moveData(freePointer, freePointer + entrySize, entryPosition - freePointer);
-          moved = true;
-        }
-
-        setIntValue(FREE_POINTER_OFFSET, freePointer + entrySize);
-
-        if (moved) {
-          int currentPositionOffset = POSITIONS_ARRAY_OFFSET;
-
-          for (int i = 0; i < size; i++) {
-            final int currentEntryPosition = getIntValue(currentPositionOffset);
-            final int updatedEntryPosition;
-
-            if (currentEntryPosition < entryPosition) {
-              updatedEntryPosition = currentEntryPosition + entrySize;
-              setIntValue(currentPositionOffset, updatedEntryPosition);
-            } else {
-              updatedEntryPosition = currentEntryPosition;
-            }
-
-            nextItem = getIntValue(updatedEntryPosition);
-            if (nextItem > 0 && nextItem < entryPosition) {
-              //update reference to the first item of linked list
-              setIntValue(updatedEntryPosition, nextItem + entrySize);
-
-              updateAllLinkedListReferences(nextItem, entryPosition, entryPosition);
-            }
-
-            currentPositionOffset += OIntegerSerializer.INT_SIZE;
-          }
-        }
-
+        removeMainEntry(entryIndex, entryPosition, keySize);
         return true;
       }
     } else {
@@ -304,13 +467,29 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
   private void updateAllLinkedListReferences(int firstItem, int boundary, int diffSize) {
     int currentItem = firstItem + diffSize;
 
-    while (currentItem < boundary) {
+    while (true) {
       final int nextItem = getIntValue(currentItem);
+
       if (nextItem > 0 && nextItem < boundary) {
         setIntValue(currentItem, nextItem + diffSize);
         currentItem = nextItem + diffSize;
       } else {
-        break;
+        return;
+      }
+    }
+  }
+
+  private int[] updateAllLinkedListReferences(int firstItem, int boundary, int currentDiffSize, int diffSize) {
+    int currentItem = firstItem + currentDiffSize;
+
+    while (true) {
+      final int nextItem = getIntValue(currentItem);
+
+      if (nextItem > 0 && nextItem < boundary) {
+        setIntValue(currentItem, nextItem + diffSize);
+        currentItem = nextItem + currentDiffSize;
+      } else {
+        return new int[] { currentItem, nextItem };
       }
     }
   }

@@ -645,7 +645,8 @@ public class OIndexManagerShared extends OIndexManagerAbstract {
         for (Iterator<OIndexFactory> it = OIndexes.getAllFactories(); it.hasNext(); ) {
           try {
             final OIndexFactory indexFactory = it.next();
-            final OBaseIndexEngine engine = indexFactory.createIndexEngine(null, index.getName(), false, storage, 0, null);
+            final OBaseIndexEngine engine = indexFactory
+                .createIndexEngine(null, index.getName(), false, storage, 0, 1, indexDefinition.getTypes().length > 1, null);
 
             engine.deleteWithoutLoad(index.getName());
           } catch (Exception e2) {

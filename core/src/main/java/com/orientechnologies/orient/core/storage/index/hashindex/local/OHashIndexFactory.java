@@ -118,7 +118,7 @@ public class OHashIndexFactory implements OIndexFactory {
 
   @Override
   public OBaseIndexEngine createIndexEngine(final String algoritm, final String name, final Boolean durableInNonTxMode,
-      final OStorage storage, final int version, final Map<String, String> engineProperties) {
+      final OStorage storage, final int version, int apiVersion, boolean multivalue, final Map<String, String> engineProperties) {
     OIndexEngine indexEngine;
 
     final String storageType = storage.getType();

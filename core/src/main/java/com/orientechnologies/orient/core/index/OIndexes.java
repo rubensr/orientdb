@@ -172,12 +172,13 @@ public final class OIndexes {
   }
 
   public static OBaseIndexEngine createIndexEngine(final String name, final String algorithm, final String type,
-      final Boolean durableInNonTxMode, final OStorage storage, final int version, final Map<String, String> indexProperties,
-      ODocument metadata) {
+      final Boolean durableInNonTxMode, final OStorage storage, final int version, int apiVersion, boolean multivalue,
+      final Map<String, String> indexProperties, ODocument metadata) {
 
     final OIndexFactory factory = findFactoryByAlgorithmAndType(algorithm, type);
 
-    return factory.createIndexEngine(algorithm, name, durableInNonTxMode, storage, version, indexProperties);
+    return factory
+        .createIndexEngine(algorithm, name, durableInNonTxMode, storage, version, apiVersion, multivalue, indexProperties);
   }
 
   public static String chooseDefaultIndexAlgorithm(String type) {

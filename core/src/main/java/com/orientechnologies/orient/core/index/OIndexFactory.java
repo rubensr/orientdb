@@ -58,5 +58,5 @@ public interface OIndexFactory {
       String valueContainerAlgorithm, ODocument metadata, int version) throws OConfigurationException;
 
   OBaseIndexEngine createIndexEngine(String algorithm, String name, Boolean durableInNonTxMode, OStorage storage, int version,
-      Map<String, String> engineProperties);
+      int apiVersion, boolean multivalue, Map<String, String> engineProperties);
 }
