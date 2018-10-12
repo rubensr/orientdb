@@ -34,6 +34,7 @@ import com.orientechnologies.orient.core.storage.impl.local.paginated.base.ODura
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -173,7 +174,9 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
         final int currentNextPosition = getIntValue(currentEntryPosition);
 
         entries.put(currentEntryPosition, currentPositionOffset);
-        nexts.put(currentNextPosition, currentEntryPosition);
+        if (currentNextPosition > 0) {
+          nexts.put(currentNextPosition, currentEntryPosition);
+        }
       }
 
       currentPositionOffset += OIntegerSerializer.INT_SIZE;
@@ -189,13 +192,35 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
         final SortedMap<Integer, Integer> linkRefToCorrect = nexts.headMap(itemToRemove);
         final int diff = totalSpace - counter * LINKED_LIST_ITEM_SIZE;
 
+        final SortedMap<Integer, Integer> entriesRefToCorrect = entries.headMap(itemToRemove);
+        for (Map.Entry<Integer, Integer> entry : entriesRefToCorrect.entrySet()) {
+          final int currentEntryOffset = entry.getValue();
+          final int currentEntryPosition = entry.getKey();
+
+          setIntValue(currentEntryOffset, currentEntryPosition + diff);
+        }
+
+        entriesRefToCorrect.clear();
+
         for (Map.Entry<Integer, Integer> entry : linkRefToCorrect.entrySet()) {
           final int first = entry.getKey();
           final int currentEntryPosition = entry.getValue();
 
           if (first < itemToRemove) {
             if (currentEntryPosition > 0) {
-              setIntValue(currentEntryPosition, first + diff);
+              final int updatedEntryPosition;
+              if (currentEntryPosition < itemToRemove) {
+                final int itemsBefore = -Collections.binarySearch(itemsToRemove, currentEntryPosition) - 1;
+                if (counter >= itemsBefore) {
+                  updatedEntryPosition = currentEntryPosition + (counter - itemsBefore + 1) * LINKED_LIST_ITEM_SIZE;
+                } else {
+                  updatedEntryPosition = currentEntryPosition;
+                }
+              } else {
+                updatedEntryPosition = currentEntryPosition;
+              }
+
+              setIntValue(updatedEntryPosition, first + diff);
             } else {
               final int compositeEntryPosition = -currentEntryPosition;
               final int prevCounter = compositeEntryPosition >>> 16;
@@ -216,15 +241,6 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
 
         linkRefToCorrect.clear();
 
-        final SortedMap<Integer, Integer> entriesRefToCorrect = entries.headMap(itemToRemove);
-        for (Map.Entry<Integer, Integer> entry : entriesRefToCorrect.entrySet()) {
-          final int currentEntryOffset = entry.getValue();
-          final int currentEntryPosition = entry.getKey();
-
-          setIntValue(currentEntryOffset, currentEntryPosition + diff);
-        }
-
-        entriesRefToCorrect.clear();
       }
 
       counter++;
@@ -237,12 +253,33 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
       final SortedMap<Integer, Integer> linkRefToCorrect = nexts.headMap(entryPosition);
       final int diff = entrySize;
 
+      final SortedMap<Integer, Integer> entriesRefToCorrect = entries.headMap(entryPosition);
+      for (Map.Entry<Integer, Integer> entry : entriesRefToCorrect.entrySet()) {
+        final int currentEntryOffset = entry.getValue();
+        final int currentEntryPosition = entry.getKey();
+
+        setIntValue(currentEntryOffset, currentEntryPosition + diff);
+      }
+
       for (Map.Entry<Integer, Integer> entry : linkRefToCorrect.entrySet()) {
         final int first = entry.getKey();
         final int currentEntryPosition = entry.getValue();
 
         if (currentEntryPosition > 0) {
-          setIntValue(currentEntryPosition, first + diff);
+          int updatedEntryPosition;
+
+          final int itemsBefore = -Collections.binarySearch(itemsToRemove, currentEntryPosition) - 1;
+          if (itemsToRemove.size() > itemsBefore) {
+            updatedEntryPosition = currentEntryPosition + (itemsToRemove.size() - itemsBefore) * LINKED_LIST_ITEM_SIZE;
+          } else {
+            updatedEntryPosition = currentEntryPosition;
+          }
+
+          if (currentEntryPosition < entryPosition) {
+            updatedEntryPosition += entrySize;
+          }
+
+          setIntValue(updatedEntryPosition, first + diff);
         } else {
           final int compositeEntryPosition = -currentEntryPosition;
           final int prevCounter = compositeEntryPosition >>> 16;
@@ -255,14 +292,6 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
         }
 
         updateAllLinkedListReferences(first, entryPosition, diff);
-      }
-
-      final SortedMap<Integer, Integer> entriesRefToCorrect = entries.headMap(entryPosition);
-      for (Map.Entry<Integer, Integer> entry : entriesRefToCorrect.entrySet()) {
-        final int currentEntryOffset = entry.getValue();
-        final int currentEntryPosition = entry.getKey();
-
-        setIntValue(currentEntryOffset, currentEntryPosition + diff);
       }
     }
 
@@ -323,7 +352,7 @@ public class OSBTreeBucketMultiValue<K> extends ODurablePage {
           //update reference to the first item of linked list
           setIntValue(updatedEntryPosition, nextItem + entrySize);
 
-          updateAllLinkedListReferences(nextItem, entryPosition, entryPosition);
+          updateAllLinkedListReferences(nextItem, entryPosition, entrySize);
         }
 
         currentPositionOffset += OIntegerSerializer.INT_SIZE;

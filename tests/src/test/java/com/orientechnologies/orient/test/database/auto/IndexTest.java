@@ -1650,6 +1650,7 @@ public class IndexTest extends ObjectDBBaseTest {
     Assert.assertTrue(explain.<Collection<String>>field("involvedIndexes").contains("TestCreateIndexAbstractClass.value"));
   }
 
+  @Test(enabled = false)
   public void testValuesContainerIsRemovedIfIndexIsRemoved() {
     if (database.getURL().startsWith("remote:"))
       return;
