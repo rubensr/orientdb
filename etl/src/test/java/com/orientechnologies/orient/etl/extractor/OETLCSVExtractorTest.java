@@ -535,4 +535,18 @@ public class OETLCSVExtractorTest extends OETLBaseTest {
     assertThat(doc.<String>field("value")).isEqualTo("myvalue");
   }
 
+  @Test
+  public void testColumnsOnFirstLineFalse() {
+    String cfgJson = "{source: { content: { value: 'first row\nsecond row' }  }, extractor : { csv: { columns: [ 'text' ], columnsOnFirstLine: false } }, loader: { test: {} } }";
+    configure(cfgJson);
+    proc.execute();
+
+    List<ODocument> res = getResult();
+    assertThat(res).hasSize(2);
+
+    ODocument doc = res.get(0);
+    assertThat(doc.<String>field("text")).isEqualTo("first row");
+    doc = res.get(1);
+    assertThat(doc.<String>field("text")).isEqualTo("second row");
+  }
 }

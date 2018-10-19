@@ -138,7 +138,11 @@ public class OETLCSVExtractor extends OETLAbstractSourceExtractor {
       }
 
       log(Level.INFO, "column types: %s", columnTypes);
-      csvFormat = csvFormat.withHeader(columnNames.toArray(new String[] {})).withSkipHeaderRecord();
+      if (csvFormat.getHeader() == null) {
+        csvFormat = csvFormat.withHeader(columnNames.toArray(new String[] {}));
+      } else {
+        csvFormat = csvFormat.withHeader(columnNames.toArray(new String[] {})).withSkipHeaderRecord();
+      }
 
     }
 
